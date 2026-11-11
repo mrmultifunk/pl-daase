@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6feb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>PL-dåse kabelregistrering</title>
+<style>
+:root{--bg:#f5f6f8;--fg:#1b1f24;--card:#fff;--muted:#6a737d;--line:#d5d9de;--accent:#1f6feb;--box:#e9ecf0;--boxline:#8b949e;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1318;--fg:#e8ebef;--card:#1a2028;--muted:#98a2ad;--line:#2d3641;--accent:#4c94ff;--box:#232b35;--boxline:#6a737d}}
+:root[data-theme="dark"]{--bg:#0f1318;--fg:#e8ebef;--card:#1a2028;--muted:#98a2ad;--line:#2d3641;--accent:#4c94ff;--box:#232b35;--boxline:#6a737d}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:520px;margin:0 auto;padding:14px}
+h1{font-size:1.2rem;margin:4px 0 12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+select,input,button{font:inherit;color:var(--fg)}
+select,input[type=text]{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+select{flex:1}
+button{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.danger{color:#d1242f}
+label.small{display:block;font-size:.8rem;color:var(--muted);margin:10px 0 4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;margin-top:12px}
+svg{display:block;width:100%;height:auto;touch-action:manipulation}
+.legend{font-size:.8rem;color:var(--muted);text-align:center;margin:2px 0 0}
+.item{display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-top:1px solid var(--line);cursor:pointer}
+.item:first-child{border-top:0}
+.dot{flex:0 0 28px;height:28px;border-radius:50%;color:#fff;font-weight:700;display:grid;place-items:center;font-size:.9rem}
+.item b{display:block}
+.item span{color:var(--muted);font-size:.9rem}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:8px 12px;border-radius:999px;font-size:.9rem}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:20}
+#sheet.open{display:flex}
+.panel{background:var(--bg);width:100%;max-width:520px;max-height:90%;overflow:auto;border-radius:18px 18px 0 0;padding:16px 14px calc(16px + env(safe-area-inset-bottom,0px))}
+.panel h2{margin:0 0 4px;font-size:1.1rem}
+.panel input[type=text]{width:100%}
+.actions{display:flex;gap:8px;margin-top:16px}
+.actions button{flex:1}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
+#toast.show{opacity:1}
+.photo img{width:100%;max-height:240px;object-fit:cover;border-radius:10px;display:block;cursor:zoom-in}
+.photo .row{margin-top:8px}
+textarea{width:100%;height:140px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:8px}
+#login{position:fixed;inset:0;background:var(--bg);z-index:40;display:none;align-items:center;justify-content:center;padding:20px}
+#login.open{display:flex}
+#login .box{width:100%;max-width:340px}
+#login input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+#login button{width:100%}
+#err{color:#d1242f;min-height:1.2em;font-size:.9rem}
+.bar{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--muted);margin:-6px 0 10px}
+.bar button{padding:4px 10px;font-size:.8rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>PL-dåse – kabelregistrering</h1>
+  <div class="bar"><span id="stat"></span><span><span id="who"></span> <button id="outBtn">Log ud</button></span></div>
+  <div class="row">
+    <select id="boxSel" aria-label="Vælg dåse"></select>
+    <button id="newBtn" class="primary">+ Ny</button>
+  </div>
+  <label class="small" for="boxName">Navn / placering</label>
+  <input type="text" id="boxName" placeholder="fx Stue, loft ved vindue">
+  <label class="small" for="refTxt">Hvad vender „op“ på tegningen mod?</label>
+  <input type="text" id="refTxt" placeholder="fx Mod døren">
+
+  <div class="card">
+    <svg id="draw" viewBox="0 0 320 330" role="img" aria-label="PL-dåse set nedefra"></svg>
+    <p class="legend">Set nedefra (montagestilling) – 1-3 øverst, 4-6 nederst. Tryk på en indføring</p>
+  </div>
+
+  <div class="card photo"><div id="photoBox"></div><div class="row"><button id="photoBtn">📷 Tilføj billede</button><button id="photoDel" class="danger">Fjern</button></div><input type="file" id="photoIn" accept="image/*" hidden></div>
+
+  <div class="card" id="list"></div>
+
+  <div class="row" style="margin-top:12px">
+    <button id="copyBtn" class="primary" style="flex:1">Kopiér som tekst</button>
+    <button id="delBtn" class="danger">Slet dåse</button>
+  </div>
+</main>
+
+<div id="login"><form id="lf" class="box"><h1>PL-dåse</h1><input type="text" id="lu" placeholder="Brugernavn" autocomplete="username" autocapitalize="none" required><input type="password" id="lp" placeholder="Kodeord" autocomplete="current-password" required><button class="primary">Log ind</button><p id="err"></p></form></div>
+<div id="sheet"><div class="panel" id="panel"></div></div>
+<div id="toast"></div>
+
+<script>
+var FN=[
+ {k:"Forsyning",c:"hsl(0,70%,48%)",s:"Forsyn."},
+ {k:"Lampe",c:"hsl(38,90%,40%)",s:"Lampe"},
+ {k:"Afbryder",c:"hsl(210,70%,45%)",s:"Afbr."},
+ {k:"Stikkontakt",c:"hsl(145,55%,36%)",s:"Stik"},
+ {k:"Korrespondance",c:"hsl(280,50%,50%)",s:"Korr."},
+ {k:"Videre til dåse",c:"hsl(185,60%,36%)",s:"Videre"},
+ {k:"Andet",c:"hsl(220,10%,45%)",s:"Andet"}
+];
+var CABLES=["NOMP 3G1,5","NOMP 3G2,5","NOMP 4G1,5","NOMP 5G1,5","NOMP 2×1,5","Signal 2×0,75"];
+var S=load()||{cur:null,boxes:[],rev:0};S.rev=S.rev||0;S.boxes.forEach(function(b){if(b.v===undefined){b.v=1;b.sv=0}});function vis(){return S.boxes.filter(function(b){return !b.deleted})}
+if(!vis().length){addBox();}
+if(!S.cur||!getBox())S.cur=vis()[0].id;
+var editIdx=-1,draft=null;
+
+function load(){try{return JSON.parse(localStorage.getItem("pl-daase")||"null")}catch(e){return null}}
+function save(){try{localStorage.setItem("pl-daase",JSON.stringify(S))}catch(e){}queueSync()}
+function addBox(){
+  var b={id:"b"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:"Dåse "+(vis().length+1),ref:"Mod døren",entries:[],v:1,sv:0};
+  for(var i=0;i<6;i++)b.entries.push({fn:"",cable:"",note:""});
+  S.boxes.push(b);S.cur=b.id;save();
+}
+function getBox(){for(var i=0;i<S.boxes.length;i++)if(S.boxes[i].id===S.cur&&!S.boxes[i].deleted)return S.boxes[i];return null}
+function fnOf(k){for(var i=0;i<FN.length;i++)if(FN[i].k===k)return FN[i];return null}
+function $(id){return document.getElementById(id)}
+function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML}
+function toast(m){var t=$("toast");t.textContent=m;t.className="show";setTimeout(function(){t.className=""},1600)}
+
+function render(){if(!getBox()){if(!vis().length)addBox();S.cur=vis()[0].id}
+  var b=getBox();
+  var sel=$("boxSel");sel.innerHTML="";
+  vis().forEach(function(x){var o=document.createElement("option");o.value=x.id;o.textContent=x.name||"(uden navn)";if(x.id===S.cur)o.selected=true;sel.appendChild(o)});
+  $("boxName").value=b.name;$("refTxt").value=b.ref;
+  drawSvg(b);drawList(b);drawPhoto(b);
+}
+function drawSvg(b){
+  var cx=160,cy=172,R=80,ER=23,out="";
+  out+='<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
+  out+='<rect x="'+(cx-R-18)+'" y="'+(cy-28)+'" width="18" height="56" rx="5" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
+  out+='<rect x="'+(cx+R)+'" y="'+(cy-28)+'" width="18" height="56" rx="5" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
+  out+='<text x="'+cx+'" y="16" text-anchor="middle" font-size="13" fill="var(--muted)">▲ '+esc(b.ref||"op")+'</text>';
+  for(var i=0;i<6;i++){
+    var g=i<3?0:1,k=i%3;
+    var ex=cx+(k-1)*52,ey=g?cy+R+12:cy-R-12;
+    var e=b.entries[i],f=fnOf(e.fn);
+    var fill=f?f.c:"var(--card)";
+    var stroke=f?"none":"var(--boxline)";
+    var tc=f?"#fff":"var(--muted)";
+    out+='<g data-i="'+i+'" style="cursor:pointer">';
+    out+='<circle cx="'+ex+'" cy="'+ey+'" r="'+ER+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2" stroke-dasharray="'+(f?"0":"4 3")+'"/>';
+    out+='<text x="'+ex+'" y="'+(ey+7)+'" text-anchor="middle" font-size="20" font-weight="700" fill="'+tc+'">'+(i+1)+'</text>';
+    if(f){
+      var ix=ex,iy=g?cy+R-26:cy-R+26;
+      out+='<text x="'+ix+'" y="'+(iy+4)+'" text-anchor="middle" font-size="11" fill="var(--fg)">'+esc(f.s)+'</text>';
+    }
+    out+='</g>';
+  }
+  var s=$("draw");s.innerHTML=out;
+  var gs=s.querySelectorAll("g");
+  for(var j=0;j<gs.length;j++)gs[j].onclick=function(){openSheet(+this.getAttribute("data-i"))};
+}
+function drawList(b){
+  var h="";
+  for(var i=0;i<6;i++){
+    var e=b.entries[i],f=fnOf(e.fn);
+    var bg=f?f.c:"var(--boxline)";
+    var title=f?esc(e.fn):"Ikke registreret";
+    var sub=[e.cable,e.note].filter(Boolean).map(esc).join(" · ");
+    h+='<div class="item" data-i="'+i+'"><div class="dot" style="background:'+bg+'">'+(i+1)+'</div><div><b>'+title+'</b><span>'+(sub||"–")+'</span></div></div>';
+  }
+  var l=$("list");l.innerHTML=h;
+  var it=l.querySelectorAll(".item");
+  for(var j=0;j<it.length;j++)it[j].onclick=function(){openSheet(+this.getAttribute("data-i"))};
+}
+
+function openSheet(i){
+  var b=getBox();editIdx=i;
+  draft={fn:b.entries[i].fn,cable:b.entries[i].cable,note:b.entries[i].note};
+  var p=$("panel");
+  var h='<h2>Indføring '+(i+1)+'</h2><div style="color:var(--muted);font-size:.85rem">Set nedefra</div>';
+  h+='<label class="small">Funktion</label><div class="chips" id="fnChips"></div>';
+  h+='<label class="small">Kabeltype</label><div class="chips" id="cbChips"></div>';
+  h+='<input type="text" id="cbIn" placeholder="Kabeltype (fri tekst)" style="margin-top:8px">';
+  h+='<label class="small">Note (fra/til, farver, osv.)</label><input type="text" id="noteIn" placeholder="fx til kontakt ved dør">';
+  h+='<div class="actions"><button id="clr" class="danger">Ryd</button><button id="cancel">Annuller</button><button id="ok" class="primary">Gem</button></div>';
+  p.innerHTML=h;
+  $("cbIn").value=draft.cable;$("noteIn").value=draft.note;
+  chips();
+  $("cbIn").oninput=function(){draft.cable=this.value;chips(true)};
+  $("noteIn").oninput=function(){draft.note=this.value};
+  $("cancel").onclick=closeSheet;
+  $("clr").onclick=function(){getBox().entries[editIdx]={fn:"",cable:"",note:""};touch(getBox());save();closeSheet();render()};
+  $("ok").onclick=function(){getBox().entries[editIdx]={fn:draft.fn,cable:draft.cable.trim(),note:draft.note.trim()};touch(getBox());save();closeSheet();render()};
+  $("sheet").className="open";
+}
+function chips(skipCable){
+  var a=$("fnChips");a.innerHTML="";
+  FN.forEach(function(f){
+    var c=document.createElement("button");c.className="chip"+(draft.fn===f.k?" on":"");c.textContent=f.k;
+    c.onclick=function(){draft.fn=(draft.fn===f.k?"":f.k);chips()};
+    a.appendChild(c);
+  });
+  var d=$("cbChips");d.innerHTML="";
+  CABLES.forEach(function(k){
+    var c=document.createElement("button");c.className="chip"+(draft.cable===k?" on":"");c.textContent=k;
+    c.onclick=function(){draft.cable=(draft.cable===k?"":k);$("cbIn").value=draft.cable;chips()};
+    d.appendChild(c);
+  });
+}
+function closeSheet(){$("sheet").className=""}
+$("sheet").onclick=function(e){if(e.target===this)closeSheet()};
+
+function drawPhoto(b){
+  var bx=$("photoBox");bx.innerHTML="";
+  if(b.photo){
+    var im=document.createElement("img");im.src=b.photo;im.alt="Billede af dåsen";
+    im.onclick=function(){$("panel").innerHTML='<img src="'+b.photo+'" style="width:100%;border-radius:10px" alt=""><div class="actions"><button id="cl" class="primary">Luk</button></div>';$("cl").onclick=closeSheet;$("sheet").className="open"};
+    bx.appendChild(im);
+  }else{
+    var p=document.createElement("div");p.style.cssText="color:var(--muted);font-size:.9rem;padding:6px 2px";p.textContent="Intet billede tilknyttet.";bx.appendChild(p);
+  }
+  $("photoBtn").textContent=b.photo?"📷 Skift billede":"📷 Tilføj billede";
+  $("photoDel").style.display=b.photo?"":"none";
+}
+$("photoBtn").onclick=function(){$("photoIn").click()};
+$("photoIn").onchange=function(){
+  var f=this.files&&this.files[0];this.value="";if(!f)return;
+  var box=getBox();
+  var r=new FileReader();
+  r.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var s=Math.min(1,900/Math.max(img.width,img.height));
+      var c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      var old=box.photo;box.photo=c.toDataURL("image/jpeg",0.72);touch(box);
+      try{localStorage.setItem("pl-daase",JSON.stringify(S));drawPhoto(box);toast("Billede gemt");queueSync()}
+      catch(e){box.photo=old;drawPhoto(box);toast("Kunne ikke gemme – for lidt plads")}
+    };
+    img.onerror=function(){toast("Kunne ikke læse billedet")};
+    img.src=r.result;
+  };
+  r.readAsDataURL(f);
+};
+$("photoDel").onclick=function(){var b=getBox();delete b.photo;touch(b);save();drawPhoto(b)};
+$("boxSel").onchange=function(){S.cur=this.value;save();render()};
+$("newBtn").onclick=function(){addBox();render()};
+$("boxName").oninput=function(){getBox().name=this.value;touch(getBox());save();var o=$("boxSel").options[$("boxSel").selectedIndex];if(o)o.textContent=this.value||"(uden navn)"};
+$("refTxt").oninput=function(){getBox().ref=this.value;touch(getBox());save();drawSvg(getBox())};
+$("delBtn").onclick=function(){
+  if(!confirm("Slet denne dåse?"))return;
+  var d=getBox();d.deleted=true;delete d.photo;touch(d);
+  if(!vis().length)addBox();
+  S.cur=vis()[0].id;save();render();
+};
+$("copyBtn").onclick=function(){
+  var b=getBox();
+  var t=(b.name||"PL-dåse")+" – set nedefra, op = "+(b.ref||"?")+"\n";
+  b.entries.forEach(function(e,i){
+    t+=(i+1)+": "+(e.fn||"ikke registreret")+(e.cable?" | "+e.cable:"")+(e.note?" | "+e.note:"")+"\n";
+  });
+  var ok=false;
+  try{
+    var ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();ok=document.execCommand("copy");document.body.removeChild(ta);
+  }catch(e){}
+  if(ok){toast("Kopieret")}
+  else{
+    $("panel").innerHTML='<h2>Kopiér teksten</h2><textarea id="ta" readonly></textarea><div class="actions"><button id="cl" class="primary">Luk</button></div>';
+    $("ta").value=t;$("cl").onclick=closeSheet;$("sheet").className="open";$("ta").select();
+  }
+};
+render();
+function touch(b){b.v=(b.v||0)+1}
+function blank(b){return !b.deleted&&!b.photo&&/^Dåse \d+$/.test(b.name)&&b.entries.every(function(e){return !e.fn&&!e.cable&&!e.note})}
+function pending(b){return b.v!==b.sv&&!(b.sv===0&&blank(b))}
+function dirty(){return S.boxes.some(pending)}
+var user=S.user||"",timer=null,syncing=false;
+function stat(t,warn){$("stat").textContent=t;$("stat").style.color=warn?"#d1242f":""}
+function queueSync(){clearTimeout(timer);timer=setTimeout(sync,1500)}
+function api(path,body){return fetch(path,{method:body?"POST":"GET",headers:{"Content-Type":"application/json","X-PL":"1"},credentials:"same-origin",body:body?JSON.stringify(body):undefined})}
+function showLogin(m){$("err").textContent=m||"";$("login").className="open";$("lu").focus()}
+async function sync(){
+  if(syncing||!user)return;
+  syncing=true;
+  try{
+    var first=S.rev===0;
+    var sent=S.boxes.filter(pending).map(function(b){return {b:b,v:b.v}});
+    var changes=sent.map(function(x){var b=x.b;return b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,entries:b.entries,photo:b.photo||""}});
+    var r=await api("/api/sync",{since:S.rev,changes:changes});
+    if(r.status===401){user="";showLogin("Log ind igen");return}
+    if(!r.ok)throw 0;
+    var d=await r.json();
+    sent.forEach(function(x){if(x.b.v===x.v)x.b.sv=x.v});
+    d.boxes.forEach(function(sb){
+      var lb=S.boxes.filter(function(b){return b.id===sb.id})[0];
+      if(lb&&lb.v!==lb.sv)return;
+      if(lb)S.boxes.splice(S.boxes.indexOf(lb),1);
+      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
+    });
+    S.boxes=S.boxes.filter(function(b){return !(b.deleted&&b.v===b.sv)});
+    if(first&&S.boxes.some(function(b){return !b.deleted&&!blank(b)}))S.boxes=S.boxes.filter(function(b){return !(b.sv===0&&b.v>0&&blank(b))});
+    S.rev=d.rev;
+    try{localStorage.setItem("pl-daase",JSON.stringify(S))}catch(e){}
+    render();
+    stat("✓ Synkroniseret");
+    if(dirty())queueSync();
+  }catch(e){stat("Offline – ændringer sendes senere",true)}
+  finally{syncing=false}
+}
+$("lf").onsubmit=async function(e){
+  e.preventDefault();$("err").textContent="";
+  try{
+    var r=await api("/api/login",{username:$("lu").value,password:$("lp").value});
+    var d=await r.json().catch(function(){return {}});
+    if(!r.ok){$("err").textContent=d.error||"Login fejlede";return}
+    if(S.user&&S.user!==d.user)S={cur:null,boxes:[],rev:0,user:""};
+    user=S.user=d.user;$("who").textContent=user;$("lp").value="";$("login").className="";
+    if(!vis().length)addBox();
+    if(!getBox())S.cur=vis()[0].id;
+    save();render();sync();
+  }catch(x){$("err").textContent="Ingen forbindelse"}
+};
+$("outBtn").onclick=async function(){
+  if(dirty()&&!confirm("Der er ændringer, som ikke er sendt til serveren. Log ud alligevel?"))return;
+  try{await api("/api/logout",{})}catch(e){}
+  try{localStorage.removeItem("pl-daase")}catch(e){}
+  S={cur:null,boxes:[],rev:0,user:""};user="";$("who").textContent="";stat("");showLogin("");
+};
+async function start(){
+  try{
+    var r=await api("/api/me");
+    if(r.status===401){showLogin("");return}
+    var d=await r.json();user=S.user=d.user;$("who").textContent=user;sync();
+  }catch(e){if(S.user){user=S.user;$("who").textContent=user;stat("Offline",true)}}
+}
+window.addEventListener("online",sync);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)sync()});
+setInterval(function(){if(dirty())sync()},30000);
+start();
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
+</script>
+</body>
+</html>

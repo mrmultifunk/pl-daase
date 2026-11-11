@@ -1,0 +1,15 @@
+services:
+  pl-daase:
+    image: ghcr.io/DIT-GITHUB-BRUGERNAVN/pl-daase:latest   # skriv dit brugernavn med små bogstaver
+    container_name: pl-daase
+    restart: unless-stopped
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./data:/data          # alt (brugere, dåser, billeder) ligger her
+    environment:
+      - SHARED=false          # true = alle brugere deler de samme dåser
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
