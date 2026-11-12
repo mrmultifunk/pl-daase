@@ -44,7 +44,7 @@ function clean(c){
   if(!c||!/^b[0-9a-z]{3,40}$/.test(c.id))return null;
   if(c.deleted)return{id:c.id,deleted:true};
   if(!Array.isArray(c.entries)||c.entries.length!==6)return null;
-  const o={id:c.id,name:str(c.name,120),ref:str(c.ref,120),entries:c.entries.map(e=>({fn:str(e&&e.fn,40),cable:str(e&&e.cable,80),note:str(e&&e.note,200)}))};
+  const o={id:c.id,name:str(c.name,120),ref:str(c.ref,120),marks:Array.from({length:6},(_,i)=>{const m=Array.isArray(c.marks)&&c.marks[i];return m&&isFinite(m.x)&&isFinite(m.y)?{x:Math.min(1,Math.max(0,+m.x)),y:Math.min(1,Math.max(0,+m.y))}:null}),entries:c.entries.map(e=>({fn:str(e&&e.fn,40),cable:str(e&&e.cable,80),note:str(e&&e.note,200)}))};
   if(typeof c.photo==="string"&&c.photo.startsWith("data:image/jpeg;base64,")&&c.photo.length<2e6)o.photo=c.photo;
   return o;
 }
@@ -67,15 +67,15 @@ const csvq=v=>{v=String(v??"");return /[";\r\n]/.test(v)?'"'+v.replace(/"/g,'""'
 function exportData(req,res,u,url){
   const q=url.searchParams,boxes=live(u),host=(req.headers["x-forwarded-proto"]||"http")+"://"+req.headers.host;
   if(q.get("format")==="csv"){
-    const rows=[["daase","op_mod","position","funktion","kabel","note"]];
-    for(const b of boxes)b.entries.forEach((e,i)=>{if(e.fn||e.cable||e.note)rows.push([b.name,b.ref,i+1,e.fn,e.cable,e.note])});
+    const rows=[["daase","op_mod","position","funktion","kabel","note","foto_x","foto_y"]];
+    for(const b of boxes)b.entries.forEach((e,i)=>{if(e.fn||e.cable||e.note){const m=b.marks&&b.marks[i];rows.push([b.name,b.ref,i+1,e.fn,e.cable,e.note,m?m.x:"",m?m.y:""])}});
     res.writeHead(200,{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":'attachment; filename="pl-daase.csv"',"Cache-Control":"no-store"});
     return res.end("\uFEFF"+rows.map(r=>r.map(csvq).join(";")).join("\r\n")+"\r\n");
   }
   const out={exported:new Date().toISOString(),user:u,
-    layout:"Positionerne er målt, som man står under dåsen med ansigtet mod ref: 1-3 er indføringerne foran en (venstre mod højre), 4-6 er bag en (venstre mod højre).",
+    layout:"Positionerne er målt, som man står under dåsen med ansigtet mod ref: 1-3 er indføringerne foran en (venstre mod højre), 4-6 er bag en (venstre mod højre). marker er placeringen på billedet som brøkdel af bredde (x, fra venstre) og højde (y, fra toppen), eller null.",
     boxes:boxes.map(b=>({id:b.id,name:b.name,ref:b.ref,
-      entries:b.entries.map((e,i)=>({position:i+1,function:e.fn,cable:e.cable,note:e.note})),
+      entries:b.entries.map((e,i)=>({position:i+1,function:e.fn,cable:e.cable,note:e.note,marker:(b.marks&&b.marks[i])||null})),
       photo_url:b.photo?host+"/api/photo/"+b.id:null,...(q.get("photos")==="1"&&b.photo?{photo:b.photo}:{})}))};
   const h={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"};
   if(q.get("download")==="1")h["Content-Disposition"]='attachment; filename="pl-daase.json"';

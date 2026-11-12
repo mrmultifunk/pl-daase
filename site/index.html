@@ -46,7 +46,12 @@ svg{display:block;width:100%;height:auto;touch-action:manipulation}
 .actions button{flex:1}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
 #toast.show{opacity:1}
-.photo img{width:100%;max-height:240px;object-fit:cover;border-radius:10px;display:block;cursor:zoom-in}
+.pw{position:relative;display:inline-block;max-width:100%;line-height:0;cursor:zoom-in}
+.pw img{display:block;max-width:100%;max-height:52vh;width:auto;height:auto;border-radius:10px}
+.panel .pw img{max-height:75vh}
+.pw.edit{cursor:crosshair}
+.mk{position:absolute;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:50%;color:#fff;font:700 14px/24px system-ui,sans-serif;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.6);cursor:pointer}
+.mk.sel{outline:3px solid var(--accent);outline-offset:2px}
 .photo .row{margin-top:8px}
 textarea{width:100%;height:140px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:8px}
 #login{position:fixed;inset:0;background:var(--bg);z-index:40;display:none;align-items:center;justify-content:center;padding:20px}
@@ -78,7 +83,7 @@ a.btn{flex:1;text-align:center;text-decoration:none;background:var(--card);borde
     <p class="legend">Stå under dåsen med ansigtet mod toppen: 1-3 er foran dig, 4-6 bag dig, og venstre er din venstre. Tryk på en indføring.</p>
   </div>
 
-  <div class="card photo"><div id="photoBox"></div><div class="row"><button id="camBtn" class="primary">📷 Tag billede</button><button id="photoBtn">🖼️ Galleri</button><button id="photoDel" class="danger">Fjern</button></div><input type="file" id="photoIn" accept="image/*" hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>
+  <div class="card photo"><div id="photoBox"></div><div id="mkBar" style="display:none;margin:8px 0"></div><div class="row"><button id="camBtn" class="primary">📷 Tag billede</button><button id="photoBtn">🖼️ Galleri</button><button id="mkBtn">📍 Markér</button><button id="photoDel" class="danger">Fjern</button></div><input type="file" id="photoIn" accept="image/*" hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>
 
   <div class="card" id="list"></div>
 
@@ -202,18 +207,52 @@ function chips(skipCable){
 function closeSheet(){$("sheet").className=""}
 $("sheet").onclick=function(e){if(e.target===this)closeSheet()};
 
+var mk={on:false,sel:0};
+function wrapHtml(b,live){
+  var m=b.marks||[],t='<div class="pw'+(live&&mk.on?' edit':'')+'"><img src="'+b.photo+'" alt="Billede af dåsen">';
+  for(var i=0;i<6;i++){var p=m[i];if(!p)continue;var f=fnOf(b.entries[i].fn);
+    t+='<span class="mk'+(live&&mk.on&&mk.sel===i?' sel':'')+'" data-i="'+i+'" style="left:'+p.x*100+'%;top:'+p.y*100+'%;background:'+(f?f.c:'var(--boxline)')+'">'+(i+1)+'</span>'}
+  return t+'</div>';
+}
+function openLight(b){$("panel").innerHTML='<div style="text-align:center">'+wrapHtml(b,false)+'</div><div class="actions"><button id="cl" class="primary">Luk</button></div>';$("cl").onclick=closeSheet;$("sheet").className="open"}
 function drawPhoto(b){
-  var bx=$("photoBox");bx.innerHTML="";
-  if(b.photo){
-    var im=document.createElement("img");im.src=b.photo;im.alt="Billede af dåsen";
-    im.onclick=function(){$("panel").innerHTML='<img src="'+b.photo+'" style="width:100%;border-radius:10px" alt=""><div class="actions"><button id="cl" class="primary">Luk</button></div>';$("cl").onclick=closeSheet;$("sheet").className="open"};
-    bx.appendChild(im);
-  }else{
-    var p=document.createElement("div");p.style.cssText="color:var(--muted);font-size:.9rem;padding:6px 2px";p.textContent="Intet billede tilknyttet.";bx.appendChild(p);
+  var bx=$("photoBox"),bar=$("mkBar");
+  if(!b.photo){mk.on=false;bx.innerHTML='<div style="color:var(--muted);font-size:.9rem;padding:6px 2px">Intet billede tilknyttet.</div>'}
+  else{
+    bx.innerHTML='<div style="text-align:center">'+wrapHtml(b,true)+'</div>';
+    var pw=bx.querySelector(".pw"),im=pw.querySelector("img");
+    pw.onclick=function(e){
+      var t=e.target;
+      if(t.classList.contains("mk")){var i=+t.getAttribute("data-i");if(mk.on){mk.sel=i;drawPhoto(b)}else openSheet(i);return}
+      if(!mk.on){openLight(b);return}
+      var r=im.getBoundingClientRect();
+      var x=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
+      b.marks=(b.marks||[]).slice();while(b.marks.length<6)b.marks.push(null);
+      b.marks[mk.sel]={x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000};
+      for(var k=1;k<=6;k++){var j=(mk.sel+k)%6;if(!b.marks[j]){mk.sel=j;break}}
+      touch(b);save();drawPhoto(b);
+    };
   }
   $("camBtn").textContent=b.photo?"📷 Tag nyt billede":"📷 Tag billede";
   $("photoDel").style.display=b.photo?"":"none";
+  $("mkBtn").style.display=b.photo?"":"none";
+  $("mkBtn").textContent=mk.on?"✓ Færdig":"📍 Markér";
+  bar.style.display=(b.photo&&mk.on)?"":"none";
+  if(b.photo&&mk.on){
+    var m=b.marks||[],t='<div style="font-size:.85rem;color:var(--muted);margin-bottom:6px">Vælg nummer, og tryk på billedet, hvor indføringen sidder. Tryk igen for at flytte.</div><div class="chips">';
+    for(var i=0;i<6;i++)t+='<button class="chip'+(mk.sel===i?' on':'')+'" data-i="'+i+'">'+(i+1)+(m[i]?' ✓':'')+'</button>';
+    t+='<button class="chip danger" id="mkDel">Fjern markør</button></div>';
+    bar.innerHTML=t;
+    var cs=bar.querySelectorAll("button[data-i]");
+    for(var q=0;q<cs.length;q++)cs[q].onclick=function(){mk.sel=+this.getAttribute("data-i");drawPhoto(b)};
+    $("mkDel").onclick=function(){if(b.marks&&b.marks[mk.sel]){b.marks=b.marks.slice();b.marks[mk.sel]=null;touch(b);save();drawPhoto(b)}};
+  }
 }
+$("mkBtn").onclick=function(){
+  var b=getBox();mk.on=!mk.on;
+  if(mk.on){var m=b.marks||[],f=0;for(var i=0;i<6;i++)if(!m[i]){f=i;break}mk.sel=f}
+  drawPhoto(b);
+};
 $("photoBtn").onclick=function(){$("photoIn").click()};
 $("camBtn").onclick=function(){$("camIn").click()};
 $("camIn").onchange=$("photoIn").onchange=function(){
@@ -226,7 +265,7 @@ $("camIn").onchange=$("photoIn").onchange=function(){
       var s=Math.min(1,1400/Math.max(img.width,img.height));
       var c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-      var old=box.photo;box.photo=c.toDataURL("image/jpeg",0.8);touch(box);
+      var old=box.photo;box.photo=c.toDataURL("image/jpeg",0.8);box.marks=[];touch(box);
       try{save();drawPhoto(box);toast("Billede gemt")}
       catch(e){box.photo=old;drawPhoto(box);toast("Kunne ikke gemme – for lidt plads")}
     };
@@ -235,8 +274,8 @@ $("camIn").onchange=$("photoIn").onchange=function(){
   };
   r.readAsDataURL(f);
 };
-$("photoDel").onclick=function(){var b=getBox();delete b.photo;touch(b);save();drawPhoto(b)};
-$("boxSel").onchange=function(){S.cur=this.value;save();render()};
+$("photoDel").onclick=function(){var b=getBox();delete b.photo;delete b.marks;touch(b);save();drawPhoto(b)};
+$("boxSel").onchange=function(){S.cur=this.value;mk.on=false;save();render()};
 $("newBtn").onclick=function(){addBox();render()};
 $("boxName").oninput=function(){getBox().name=this.value;touch(getBox());save();var o=$("boxSel").options[$("boxSel").selectedIndex];if(o)o.textContent=this.value||"(uden navn)"};
 $("refTxt").oninput=function(){getBox().ref=this.value;touch(getBox());save();drawSvg(getBox())};
@@ -322,7 +361,7 @@ async function sync(){
   try{
     var first=S.rev===0;
     var sent=[],changes=[],size=0;
-    S.boxes.filter(pending).forEach(function(b){if(sent.length&&size>6e6)return;size+=(b.photo||"").length+600;sent.push({b:b,v:b.v});changes.push(b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,entries:b.entries,photo:b.photo||""})});
+    S.boxes.filter(pending).forEach(function(b){if(sent.length&&size>6e6)return;size+=(b.photo||"").length+600;sent.push({b:b,v:b.v});changes.push(b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,marks:b.marks||[],entries:b.entries,photo:b.photo||""})});
     
     var r=await api("/api/sync",{since:S.rev,changes:changes});
     if(r.status===401){user="";showLogin("Log ind igen");return}
@@ -333,7 +372,7 @@ async function sync(){
       var lb=S.boxes.filter(function(b){return b.id===sb.id})[0];
       if(lb&&lb.v!==lb.sv)return;
       if(lb)S.boxes.splice(S.boxes.indexOf(lb),1);
-      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
+      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,marks:sb.marks||[],entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
     });
     S.boxes=S.boxes.filter(function(b){return !(b.deleted&&b.v===b.sv)});
     if(first&&S.boxes.some(function(b){return !b.deleted&&!blank(b)}))S.boxes=S.boxes.filter(function(b){return !(b.sv===0&&b.v>0&&blank(b))});
