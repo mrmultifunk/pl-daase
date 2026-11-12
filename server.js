@@ -88,33 +88,6 @@ function photo(res,u,id){
   res.end(Buffer.from(b.photo.split(",")[1],"base64"));
 }
 
-// ---- Eksport til andre programmer ----
-const live=u=>Object.values(readJson(dfile(u),{boxes:{}}).boxes).filter(b=>!b.deleted).sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
-const csvq=v=>{v=String(v??"");return /[";\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
-function exportData(req,res,u,url){
-  const q=url.searchParams,boxes=live(u),host=(req.headers["x-forwarded-proto"]||"http")+"://"+req.headers.host;
-  if(q.get("format")==="csv"){
-    const rows=[["daase","op_mod","position","funktion","kabel","note","foto_x","foto_y"]];
-    for(const b of boxes)b.entries.forEach((e,i)=>{if(e.fn||e.cable||e.note){const m=b.marks&&b.marks[i];rows.push([b.name,b.ref,i+1,e.fn,e.cable,e.note,m?m.x:"",m?m.y:""])}});
-    res.writeHead(200,{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":'attachment; filename="pl-daase.csv"',"Cache-Control":"no-store"});
-    return res.end("\uFEFF"+rows.map(r=>r.map(csvq).join(";")).join("\r\n")+"\r\n");
-  }
-  const out={exported:new Date().toISOString(),user:u,
-    layout:"Positionerne er målt, som man står under dåsen med ansigtet mod ref: 1-3 er indføringerne foran en (venstre mod højre), 4-6 er bag en (venstre mod højre). marker er placeringen på billedet som brøkdel af bredde (x, fra venstre) og højde (y, fra toppen), eller null.",
-    boxes:boxes.map(b=>({id:b.id,name:b.name,ref:b.ref,
-      entries:b.entries.map((e,i)=>({position:i+1,function:e.fn,cable:e.cable,note:e.note,marker:(b.marks&&b.marks[i])||null})),
-      photo_url:b.photo?host+"/api/photo/"+b.id:null,...(q.get("photos")==="1"&&b.photo?{photo:b.photo}:{})}))};
-  const h={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"};
-  if(q.get("download")==="1")h["Content-Disposition"]='attachment; filename="pl-daase.json"';
-  res.writeHead(200,h);res.end(JSON.stringify(out,null,2));
-}
-function photo(res,u,id){
-  const b=live(u).find(x=>x.id===id);
-  if(!b||!b.photo){res.writeHead(404);return res.end()}
-  res.writeHead(200,{"Content-Type":"image/jpeg","Cache-Control":"private, max-age=300"});
-  res.end(Buffer.from(b.photo.split(",")[1],"base64"));
-}
-
 // ---- Statiske filer ----
 const MIME={".html":"text/html; charset=utf-8",".js":"text/javascript",".webmanifest":"application/manifest+json",".png":"image/png"};
 function serve(req,res){
