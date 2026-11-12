@@ -54,13 +54,14 @@ textarea{width:100%;height:140px;background:var(--card);color:var(--fg);border:1
 #login .box{width:100%;max-width:340px}
 #login input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
 #login button{width:100%}
+a.btn{flex:1;text-align:center;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;color:var(--fg)}
 #err{color:#d1242f;min-height:1.2em;font-size:.9rem}
 .bar{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--muted);margin:-6px 0 10px}
 .bar button{padding:4px 10px;font-size:.8rem}
 </style>
 </head>
 <body>
-<main>
+<main id="app" style="visibility:hidden">
   <h1>PL-dåse – kabelregistrering</h1>
   <div class="bar"><span id="stat"></span><span><span id="who"></span> <button id="outBtn">Log ud</button></span></div>
   <div class="row">
@@ -69,17 +70,20 @@ textarea{width:100%;height:140px;background:var(--card);color:var(--fg);border:1
   </div>
   <label class="small" for="boxName">Navn / placering</label>
   <input type="text" id="boxName" placeholder="fx Stue, loft ved vindue">
-  <label class="small" for="refTxt">Hvad vender „op“ på tegningen mod?</label>
+  <label class="small" for="refTxt">Toppen af skærmen vender mod</label>
   <input type="text" id="refTxt" placeholder="fx Mod døren">
 
   <div class="card">
     <svg id="draw" viewBox="0 0 320 330" role="img" aria-label="PL-dåse set nedefra"></svg>
-    <p class="legend">Set nedefra (montagestilling) – 1-3 øverst, 4-6 nederst. Tryk på en indføring</p>
+    <p class="legend" id="legend"></p>
+    <div class="row" style="justify-content:center;margin-top:8px"><button id="rotL">↺ Drej</button><button id="rotR">↻ Drej</button><button id="mirBtn">⇋ Spejl</button></div>
   </div>
 
   <div class="card photo"><div id="photoBox"></div><div class="row"><button id="camBtn" class="primary">📷 Tag billede</button><button id="photoBtn">🖼️ Galleri</button><button id="photoDel" class="danger">Fjern</button></div><input type="file" id="photoIn" accept="image/*" hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>
 
   <div class="card" id="list"></div>
+
+  <div class="row" style="margin-top:12px"><a class="btn" href="/api/export?format=csv" download>⬇ Eksportér CSV</a><a class="btn" href="/api/export?format=json&amp;download=1" download>⬇ Eksportér JSON</a></div>
 
   <div class="row" style="margin-top:12px">
     <button id="copyBtn" class="primary" style="flex:1">Kopiér som tekst</button>
@@ -102,13 +106,13 @@ var FN=[
  {k:"Andet",c:"hsl(220,10%,45%)",s:"Andet"}
 ];
 var CABLES=["NOMP 3G1,5","NOMP 3G2,5","NOMP 4G1,5","NOMP 5G1,5","NOMP 2×1,5","Signal 2×0,75"];
-var S=load()||{cur:null,boxes:[],rev:0};S.rev=S.rev||0;S.boxes.forEach(function(b){if(b.v===undefined){b.v=1;b.sv=0}});function vis(){return S.boxes.filter(function(b){return !b.deleted})}
-if(!vis().length){addBox();}
-if(!S.cur||!getBox())S.cur=vis()[0].id;
+var S={cur:null,boxes:[],rev:0};function vis(){return S.boxes.filter(function(b){return !b.deleted})}
+
+
 var editIdx=-1,draft=null;
 
 function load(){try{return JSON.parse(localStorage.getItem("pl-daase")||"null")}catch(e){return null}}
-function save(){try{localStorage.setItem("pl-daase",JSON.stringify(S))}catch(e){}queueSync()}
+function save(){clearTimeout(pt);pt=setTimeout(flush,250);queueSync()}
 function addBox(){
   var b={id:"b"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:"Dåse "+(vis().length+1),ref:"Mod døren",entries:[],v:1,sv:0};
   for(var i=0;i<6;i++)b.entries.push({fn:"",cable:"",note:""});
@@ -128,30 +132,27 @@ function render(){if(!getBox()){if(!vis().length)addBox();S.cur=vis()[0].id}
   drawSvg(b);drawList(b);drawPhoto(b);
 }
 function drawSvg(b){
-  var cx=160,cy=172,R=80,ER=23,out="";
+  var cx=160,cy=172,R=80,ER=23,rot=b.rot||0,mir=!!b.mir,out="";
+  function tp(x,y){if(mir)x=-x;for(var r=0;r<rot;r++){var t=x;x=-y;y=t}return [cx+x,cy+y]}
+  out+='<g transform="translate('+cx+' '+cy+') rotate('+rot*90+') scale('+(mir?-1:1)+' 1)"><rect x="'+(R-2)+'" y="-34" width="30" height="68" rx="6" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/><circle cx="'+(R+14)+'" cy="-21" r="4" fill="var(--bg)" stroke="var(--boxline)"/><circle cx="'+(R+14)+'" cy="21" r="4" fill="var(--bg)" stroke="var(--boxline)"/></g>';
   out+='<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
-  out+='<rect x="'+(cx-R-18)+'" y="'+(cy-28)+'" width="18" height="56" rx="5" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
-  out+='<rect x="'+(cx+R)+'" y="'+(cy-28)+'" width="18" height="56" rx="5" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
+  var et=tp(R+14,4);out+='<text x="'+et[0]+'" y="'+et[1]+'" text-anchor="middle" font-size="10" fill="var(--muted)">øre</text>';
   out+='<text x="'+cx+'" y="16" text-anchor="middle" font-size="13" fill="var(--muted)">▲ '+esc(b.ref||"op")+'</text>';
   for(var i=0;i<6;i++){
-    var g=i<3?0:1,k=i%3;
-    var ex=cx+(k-1)*52,ey=g?cy+R+12:cy-R-12;
+    var g=i<3?0:1,k=i%3,sg=g?1:-1;
+    var p=tp((k-1)*52,sg*(R+12)),ex=p[0],ey=p[1];
     var e=b.entries[i],f=fnOf(e.fn);
-    var fill=f?f.c:"var(--card)";
-    var stroke=f?"none":"var(--boxline)";
-    var tc=f?"#fff":"var(--muted)";
+    var fill=f?f.c:"var(--card)",stroke=f?"none":"var(--boxline)",tc=f?"#fff":"var(--muted)";
     out+='<g data-i="'+i+'" style="cursor:pointer">';
     out+='<circle cx="'+ex+'" cy="'+ey+'" r="'+ER+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2" stroke-dasharray="'+(f?"0":"4 3")+'"/>';
     out+='<text x="'+ex+'" y="'+(ey+7)+'" text-anchor="middle" font-size="20" font-weight="700" fill="'+tc+'">'+(i+1)+'</text>';
-    if(f){
-      var ix=ex,iy=g?cy+R-26:cy-R+26;
-      out+='<text x="'+ix+'" y="'+(iy+4)+'" text-anchor="middle" font-size="11" fill="var(--fg)">'+esc(f.s)+'</text>';
-    }
+    if(f){var q=tp((k-1)*52,sg*(rot%2?R-48:R-26));out+='<text x="'+q[0]+'" y="'+(q[1]+4)+'" text-anchor="middle" font-size="11" fill="var(--fg)">'+esc(f.s)+'</text>'}
     out+='</g>';
   }
-  var s=$("draw");s.innerHTML=out;
-  var gs=s.querySelectorAll("g");
+  var sv=$("draw");sv.innerHTML=out;
+  var gs=sv.querySelectorAll("g[data-i]");
   for(var j=0;j<gs.length;j++)gs[j].onclick=function(){openSheet(+this.getAttribute("data-i"))};
+  $("legend").textContent=(mir?"Spejlvendt (set oppefra)":"Set nedefra")+(rot?" · drejet "+rot*90+"°":"")+" · tryk på en indføring";
 }
 function drawList(b){
   var h="";
@@ -225,11 +226,11 @@ $("camIn").onchange=$("photoIn").onchange=function(){
   r.onload=function(){
     var img=new Image();
     img.onload=function(){
-      var s=Math.min(1,900/Math.max(img.width,img.height));
+      var s=Math.min(1,1400/Math.max(img.width,img.height));
       var c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-      var old=box.photo;box.photo=c.toDataURL("image/jpeg",0.72);touch(box);
-      try{localStorage.setItem("pl-daase",JSON.stringify(S));drawPhoto(box);toast("Billede gemt");queueSync()}
+      var old=box.photo;box.photo=c.toDataURL("image/jpeg",0.8);touch(box);
+      try{save();drawPhoto(box);toast("Billede gemt")}
       catch(e){box.photo=old;drawPhoto(box);toast("Kunne ikke gemme – for lidt plads")}
     };
     img.onerror=function(){toast("Kunne ikke læse billedet")};
@@ -238,6 +239,10 @@ $("camIn").onchange=$("photoIn").onchange=function(){
   r.readAsDataURL(f);
 };
 $("photoDel").onclick=function(){var b=getBox();delete b.photo;touch(b);save();drawPhoto(b)};
+function view(fn){var b=getBox();fn(b);touch(b);save();drawSvg(b)}
+$("rotL").onclick=function(){view(function(b){b.rot=((b.rot||0)+3)%4})};
+$("rotR").onclick=function(){view(function(b){b.rot=((b.rot||0)+1)%4})};
+$("mirBtn").onclick=function(){view(function(b){b.mir=!b.mir})};
 $("boxSel").onchange=function(){S.cur=this.value;save();render()};
 $("newBtn").onclick=function(){addBox();render()};
 $("boxName").oninput=function(){getBox().name=this.value;touch(getBox());save();var o=$("boxSel").options[$("boxSel").selectedIndex];if(o)o.textContent=this.value||"(uden navn)"};
@@ -264,12 +269,56 @@ $("copyBtn").onclick=function(){
     $("ta").value=t;$("cl").onclick=closeSheet;$("sheet").className="open";$("ta").select();
   }
 };
-render();
+var DB=null,stored=new WeakMap(),known={},pt=null,pw=Promise.resolve();
+function dbOpen(){return new Promise(function(res,rej){var r=indexedDB.open("pl-daase",1);r.onupgradeneeded=function(){r.result.createObjectStore("boxes",{keyPath:"id"});r.result.createObjectStore("meta")};r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}})}
+function dbReq(store,fn){return new Promise(function(res,rej){var r=fn(DB.transaction(store).objectStore(store));r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}})}
+function sigOf(b){return b.v+"|"+b.sv+"|"+(b.deleted?1:0)}
+function persist(){
+  if(!DB){try{localStorage.setItem("pl-daase",JSON.stringify(S))}catch(e){}return Promise.resolve(false)}
+  var ws=[],now={};
+  S.boxes.forEach(function(b){now[b.id]=1;var g=sigOf(b);if(stored.get(b)!==g)ws.push([b,g])});
+  var dels=Object.keys(known).filter(function(id){return !now[id]});
+  var meta={cur:S.cur,rev:S.rev,user:S.user||""};
+  return new Promise(function(res){
+    try{
+      var tx=DB.transaction(["boxes","meta"],"readwrite"),bs=tx.objectStore("boxes");
+      ws.forEach(function(w){bs.put(w[0])});
+      dels.forEach(function(id){bs.delete(id)});
+      tx.objectStore("meta").put(meta,"s");
+      tx.oncomplete=function(){ws.forEach(function(w){stored.set(w[0],w[1]);known[w[0].id]=1});dels.forEach(function(id){delete known[id]});res(true)};
+      tx.onerror=tx.onabort=function(){res(false)};
+    }catch(e){res(false)}
+  });
+}
+function flush(){clearTimeout(pt);pw=pw.then(persist)}
+function wipeDb(){known={};stored=new WeakMap();if(!DB)return;try{var tx=DB.transaction(["boxes","meta"],"readwrite");tx.objectStore("boxes").clear();tx.objectStore("meta").clear()}catch(e){}}
+async function boot(){
+  var loaded=false,old=null;
+  try{
+    DB=await dbOpen();
+    var meta=await dbReq("meta",function(o){return o.get("s")}),bs=await dbReq("boxes",function(o){return o.getAll()});
+    if(meta||bs.length){
+      S={cur:meta&&meta.cur||null,rev:meta&&meta.rev||0,user:meta&&meta.user||"",boxes:bs};
+      bs.forEach(function(b){known[b.id]=1;stored.set(b,sigOf(b))});loaded=true;
+    }
+  }catch(e){DB=null}
+  if(!loaded){
+    old=load();
+    if(old&&old.boxes&&old.boxes.length){S=old;S.rev=S.rev||0;S.boxes.forEach(function(b){if(b.v===undefined){b.v=1;b.sv=0}})}else old=null;
+  }
+  user=S.user||"";$("who").textContent=user;
+  if(!vis().length)addBox();
+  if(!getBox())S.cur=vis()[0].id;
+  render();$("app").style.visibility="visible";
+  var ok=await persist();
+  if(old&&DB&&ok){try{localStorage.removeItem("pl-daase")}catch(e){}}
+  start();
+}
 function touch(b){b.v=(b.v||0)+1}
 function blank(b){return !b.deleted&&!b.photo&&/^Dåse \d+$/.test(b.name)&&b.entries.every(function(e){return !e.fn&&!e.cable&&!e.note})}
 function pending(b){return b.v!==b.sv&&!(b.sv===0&&blank(b))}
 function dirty(){return S.boxes.some(pending)}
-var user=S.user||"",timer=null,syncing=false;
+var user="",timer=null,syncing=false;
 function stat(t,warn){$("stat").textContent=t;$("stat").style.color=warn?"#d1242f":""}
 function queueSync(){clearTimeout(timer);timer=setTimeout(sync,1500)}
 function api(path,body){return fetch(path,{method:body?"POST":"GET",headers:{"Content-Type":"application/json","X-PL":"1"},credentials:"same-origin",body:body?JSON.stringify(body):undefined})}
@@ -279,8 +328,9 @@ async function sync(){
   syncing=true;
   try{
     var first=S.rev===0;
-    var sent=S.boxes.filter(pending).map(function(b){return {b:b,v:b.v}});
-    var changes=sent.map(function(x){var b=x.b;return b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,entries:b.entries,photo:b.photo||""}});
+    var sent=[],changes=[],size=0;
+    S.boxes.filter(pending).forEach(function(b){if(sent.length&&size>6e6)return;size+=(b.photo||"").length+600;sent.push({b:b,v:b.v});changes.push(b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,rot:b.rot||0,mir:!!b.mir,entries:b.entries,photo:b.photo||""})});
+    
     var r=await api("/api/sync",{since:S.rev,changes:changes});
     if(r.status===401){user="";showLogin("Log ind igen");return}
     if(!r.ok)throw 0;
@@ -290,12 +340,12 @@ async function sync(){
       var lb=S.boxes.filter(function(b){return b.id===sb.id})[0];
       if(lb&&lb.v!==lb.sv)return;
       if(lb)S.boxes.splice(S.boxes.indexOf(lb),1);
-      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
+      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,rot:sb.rot||0,mir:!!sb.mir,entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
     });
     S.boxes=S.boxes.filter(function(b){return !(b.deleted&&b.v===b.sv)});
     if(first&&S.boxes.some(function(b){return !b.deleted&&!blank(b)}))S.boxes=S.boxes.filter(function(b){return !(b.sv===0&&b.v>0&&blank(b))});
     S.rev=d.rev;
-    try{localStorage.setItem("pl-daase",JSON.stringify(S))}catch(e){}
+    flush();
     render();
     stat("✓ Synkroniseret");
     if(dirty())queueSync();
@@ -318,7 +368,7 @@ $("lf").onsubmit=async function(e){
 $("outBtn").onclick=async function(){
   if(dirty()&&!confirm("Der er ændringer, som ikke er sendt til serveren. Log ud alligevel?"))return;
   try{await api("/api/logout",{})}catch(e){}
-  try{localStorage.removeItem("pl-daase")}catch(e){}
+  clearTimeout(pt);wipeDb();
   S={cur:null,boxes:[],rev:0,user:""};user="";$("who").textContent="";stat("");showLogin("");
 };
 async function start(){
@@ -329,9 +379,10 @@ async function start(){
   }catch(e){if(S.user){user=S.user;$("who").textContent=user;stat("Offline",true)}}
 }
 window.addEventListener("online",sync);
-document.addEventListener("visibilitychange",function(){if(!document.hidden)sync()});
+document.addEventListener("visibilitychange",function(){if(document.hidden)flush();else sync()});
+window.addEventListener("pagehide",flush);
 setInterval(function(){if(dirty())sync()},30000);
-start();
+boot().catch(function(){$("app").style.visibility="visible"});
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
 </script>
 </body>
