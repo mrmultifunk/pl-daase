@@ -44,7 +44,7 @@ function clean(c){
   if(!c||!/^b[0-9a-z]{3,40}$/.test(c.id))return null;
   if(c.deleted)return{id:c.id,deleted:true};
   if(!Array.isArray(c.entries)||c.entries.length!==6)return null;
-  const o={id:c.id,name:str(c.name,120),ref:str(c.ref,120),rot:Math.max(0,Math.min(3,+c.rot|0)),mir:!!c.mir,entries:c.entries.map(e=>({fn:str(e&&e.fn,40),cable:str(e&&e.cable,80),note:str(e&&e.note,200)}))};
+  const o={id:c.id,name:str(c.name,120),ref:str(c.ref,120),entries:c.entries.map(e=>({fn:str(e&&e.fn,40),cable:str(e&&e.cable,80),note:str(e&&e.note,200)}))};
   if(typeof c.photo==="string"&&c.photo.startsWith("data:image/jpeg;base64,")&&c.photo.length<2e6)o.photo=c.photo;
   return o;
 }
@@ -73,8 +73,8 @@ function exportData(req,res,u,url){
     return res.end("\uFEFF"+rows.map(r=>r.map(csvq).join(";")).join("\r\n")+"\r\n");
   }
   const out={exported:new Date().toISOString(),user:u,
-    layout:"Positioner gælder dåsens egen orientering set nedefra: øret til højre, 1-3 øverst og 4-6 nederst (venstre mod højre). view angiver, hvordan tegningen er drejet/spejlet i appen, og ref hvad toppen af skærmen vender mod.",
-    boxes:boxes.map(b=>({id:b.id,name:b.name,ref:b.ref,view:{rotation_deg:(b.rot||0)*90,mirrored:!!b.mir},
+    layout:"Positionerne er målt, som man står under dåsen med ansigtet mod ref: 1-3 er indføringerne foran en (venstre mod højre), 4-6 er bag en (venstre mod højre).",
+    boxes:boxes.map(b=>({id:b.id,name:b.name,ref:b.ref,
       entries:b.entries.map((e,i)=>({position:i+1,function:e.fn,cable:e.cable,note:e.note})),
       photo_url:b.photo?host+"/api/photo/"+b.id:null,...(q.get("photos")==="1"&&b.photo?{photo:b.photo}:{})}))};
   const h={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"};

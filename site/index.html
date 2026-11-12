@@ -70,13 +70,12 @@ a.btn{flex:1;text-align:center;text-decoration:none;background:var(--card);borde
   </div>
   <label class="small" for="boxName">Navn / placering</label>
   <input type="text" id="boxName" placeholder="fx Stue, loft ved vindue">
-  <label class="small" for="refTxt">Toppen af skærmen vender mod</label>
+  <label class="small" for="refTxt">Jeg står med ansigtet mod (indføring 1-3 er foran mig)</label>
   <input type="text" id="refTxt" placeholder="fx Mod døren">
 
   <div class="card">
     <svg id="draw" viewBox="0 0 320 330" role="img" aria-label="PL-dåse set nedefra"></svg>
-    <p class="legend" id="legend"></p>
-    <div class="row" style="justify-content:center;margin-top:8px"><button id="rotL">↺ Drej</button><button id="rotR">↻ Drej</button><button id="mirBtn">⇋ Spejl</button></div>
+    <p class="legend">Stå under dåsen med ansigtet mod toppen: 1-3 er foran dig, 4-6 bag dig, og venstre er din venstre. Tryk på en indføring.</p>
   </div>
 
   <div class="card photo"><div id="photoBox"></div><div class="row"><button id="camBtn" class="primary">📷 Tag billede</button><button id="photoBtn">🖼️ Galleri</button><button id="photoDel" class="danger">Fjern</button></div><input type="file" id="photoIn" accept="image/*" hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>
@@ -132,27 +131,25 @@ function render(){if(!getBox()){if(!vis().length)addBox();S.cur=vis()[0].id}
   drawSvg(b);drawList(b);drawPhoto(b);
 }
 function drawSvg(b){
-  var cx=160,cy=172,R=80,ER=23,rot=b.rot||0,mir=!!b.mir,out="";
-  function tp(x,y){if(mir)x=-x;for(var r=0;r<rot;r++){var t=x;x=-y;y=t}return [cx+x,cy+y]}
-  out+='<g transform="translate('+cx+' '+cy+') rotate('+rot*90+') scale('+(mir?-1:1)+' 1)"><rect x="'+(R-2)+'" y="-34" width="30" height="68" rx="6" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/><circle cx="'+(R+14)+'" cy="-21" r="4" fill="var(--bg)" stroke="var(--boxline)"/><circle cx="'+(R+14)+'" cy="21" r="4" fill="var(--bg)" stroke="var(--boxline)"/></g>';
+  var cx=160,cy=172,R=80,ER=23,out="",ear='" y="'+(cy-28)+'" width="18" height="56" rx="5" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
+  out+='<rect x="'+(cx-R-18)+ear+'<rect x="'+(cx+R)+ear;
   out+='<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
-  var et=tp(R+14,4);out+='<text x="'+et[0]+'" y="'+et[1]+'" text-anchor="middle" font-size="10" fill="var(--muted)">øre</text>';
-  out+='<text x="'+cx+'" y="16" text-anchor="middle" font-size="13" fill="var(--muted)">▲ '+esc(b.ref||"op")+'</text>';
+  out+='<text x="'+cx+'" y="16" text-anchor="middle" font-size="13" fill="var(--muted)">▲ '+esc(b.ref||"foran dig")+'</text>';
   for(var i=0;i<6;i++){
-    var g=i<3?0:1,k=i%3,sg=g?1:-1;
-    var p=tp((k-1)*52,sg*(R+12)),ex=p[0],ey=p[1];
+    var g=i<3?0:1,k=i%3,ex=cx+(k-1)*52,ey=g?cy+R+12:cy-R-12,ly=g?cy+R-26:cy-R+26;
     var e=b.entries[i],f=fnOf(e.fn);
     var fill=f?f.c:"var(--card)",stroke=f?"none":"var(--boxline)",tc=f?"#fff":"var(--muted)";
     out+='<g data-i="'+i+'" style="cursor:pointer">';
     out+='<circle cx="'+ex+'" cy="'+ey+'" r="'+ER+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2" stroke-dasharray="'+(f?"0":"4 3")+'"/>';
     out+='<text x="'+ex+'" y="'+(ey+7)+'" text-anchor="middle" font-size="20" font-weight="700" fill="'+tc+'">'+(i+1)+'</text>';
-    if(f){var q=tp((k-1)*52,sg*(rot%2?R-48:R-26));out+='<text x="'+q[0]+'" y="'+(q[1]+4)+'" text-anchor="middle" font-size="11" fill="var(--fg)">'+esc(f.s)+'</text>'}
+    if(f)out+='<text x="'+ex+'" y="'+(ly+4)+'" text-anchor="middle" font-size="11" fill="var(--fg)">'+esc(f.s)+'</text>';
     out+='</g>';
   }
+  out+='<ellipse cx="'+cx+'" cy="316" rx="20" ry="8" fill="var(--boxline)"/><circle cx="'+cx+'" cy="314" r="7" fill="var(--muted)"/><path d="M'+cx+' 300 L'+(cx-5)+' 308 L'+(cx+5)+' 308Z" fill="var(--muted)"/>';
+  out+='<text x="'+(cx+30)+'" y="320" font-size="12" fill="var(--muted)">Du står her</text>';
   var sv=$("draw");sv.innerHTML=out;
   var gs=sv.querySelectorAll("g[data-i]");
   for(var j=0;j<gs.length;j++)gs[j].onclick=function(){openSheet(+this.getAttribute("data-i"))};
-  $("legend").textContent=(mir?"Spejlvendt (set oppefra)":"Set nedefra")+(rot?" · drejet "+rot*90+"°":"")+" · tryk på en indføring";
 }
 function drawList(b){
   var h="";
@@ -239,10 +236,6 @@ $("camIn").onchange=$("photoIn").onchange=function(){
   r.readAsDataURL(f);
 };
 $("photoDel").onclick=function(){var b=getBox();delete b.photo;touch(b);save();drawPhoto(b)};
-function view(fn){var b=getBox();fn(b);touch(b);save();drawSvg(b)}
-$("rotL").onclick=function(){view(function(b){b.rot=((b.rot||0)+3)%4})};
-$("rotR").onclick=function(){view(function(b){b.rot=((b.rot||0)+1)%4})};
-$("mirBtn").onclick=function(){view(function(b){b.mir=!b.mir})};
 $("boxSel").onchange=function(){S.cur=this.value;save();render()};
 $("newBtn").onclick=function(){addBox();render()};
 $("boxName").oninput=function(){getBox().name=this.value;touch(getBox());save();var o=$("boxSel").options[$("boxSel").selectedIndex];if(o)o.textContent=this.value||"(uden navn)"};
@@ -329,7 +322,7 @@ async function sync(){
   try{
     var first=S.rev===0;
     var sent=[],changes=[],size=0;
-    S.boxes.filter(pending).forEach(function(b){if(sent.length&&size>6e6)return;size+=(b.photo||"").length+600;sent.push({b:b,v:b.v});changes.push(b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,rot:b.rot||0,mir:!!b.mir,entries:b.entries,photo:b.photo||""})});
+    S.boxes.filter(pending).forEach(function(b){if(sent.length&&size>6e6)return;size+=(b.photo||"").length+600;sent.push({b:b,v:b.v});changes.push(b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,entries:b.entries,photo:b.photo||""})});
     
     var r=await api("/api/sync",{since:S.rev,changes:changes});
     if(r.status===401){user="";showLogin("Log ind igen");return}
@@ -340,7 +333,7 @@ async function sync(){
       var lb=S.boxes.filter(function(b){return b.id===sb.id})[0];
       if(lb&&lb.v!==lb.sv)return;
       if(lb)S.boxes.splice(S.boxes.indexOf(lb),1);
-      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,rot:sb.rot||0,mir:!!sb.mir,entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
+      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
     });
     S.boxes=S.boxes.filter(function(b){return !(b.deleted&&b.v===b.sv)});
     if(first&&S.boxes.some(function(b){return !b.deleted&&!blank(b)}))S.boxes=S.boxes.filter(function(b){return !(b.sv===0&&b.v>0&&blank(b))});
