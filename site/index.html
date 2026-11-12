@@ -46,7 +46,12 @@ svg{display:block;width:100%;height:auto;touch-action:manipulation}
 .actions button{flex:1}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
 #toast.show{opacity:1}
-.photo img{width:100%;max-height:240px;object-fit:cover;border-radius:10px;display:block;cursor:zoom-in}
+.pw{position:relative;display:inline-block;max-width:100%;line-height:0;cursor:zoom-in}
+.pw img{display:block;max-width:100%;max-height:52vh;width:auto;height:auto;border-radius:10px}
+.panel .pw img{max-height:75vh}
+.pw.edit{cursor:crosshair}
+.mk{position:absolute;transform:translate(-50%,-50%);width:28px;height:28px;border-radius:50%;color:#fff;font:700 14px/24px system-ui,sans-serif;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.6);cursor:pointer}
+.mk.sel{outline:3px solid var(--accent);outline-offset:2px}
 .photo .row{margin-top:8px}
 textarea{width:100%;height:140px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:8px}
 #login{position:fixed;inset:0;background:var(--bg);z-index:40;display:none;align-items:center;justify-content:center;padding:20px}
@@ -54,13 +59,14 @@ textarea{width:100%;height:140px;background:var(--card);color:var(--fg);border:1
 #login .box{width:100%;max-width:340px}
 #login input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
 #login button{width:100%}
+a.btn{flex:1;text-align:center;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;color:var(--fg)}
 #err{color:#d1242f;min-height:1.2em;font-size:.9rem}
 .bar{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--muted);margin:-6px 0 10px}
 .bar button{padding:4px 10px;font-size:.8rem}
 </style>
 </head>
 <body>
-<main>
+<main id="app" style="visibility:hidden">
   <h1>PL-dåse – kabelregistrering</h1>
   <div class="bar"><span id="stat"></span><span><span id="who"></span> <button id="outBtn">Log ud</button></span></div>
   <div class="row">
@@ -69,22 +75,25 @@ textarea{width:100%;height:140px;background:var(--card);color:var(--fg);border:1
   </div>
   <label class="small" for="boxName">Navn / placering</label>
   <input type="text" id="boxName" placeholder="fx Stue, loft ved vindue">
-  <label class="small" for="refTxt">Hvad vender „op“ på tegningen mod?</label>
+  <label class="small" for="refTxt">Jeg står med ansigtet mod (indføring 1-3 er foran mig)</label>
   <input type="text" id="refTxt" placeholder="fx Mod døren">
 
   <div class="card">
     <svg id="draw" viewBox="0 0 320 330" role="img" aria-label="PL-dåse set nedefra"></svg>
-    <p class="legend">Set nedefra (montagestilling) – 1-3 øverst, 4-6 nederst. Tryk på en indføring</p>
+    <p class="legend">Stå under dåsen med ansigtet mod toppen: 1-3 er foran dig, 4-6 bag dig, og venstre er din venstre. Tryk på en indføring.</p>
   </div>
 
-  <div class="card photo"><div id="photoBox"></div><div class="row"><button id="camBtn" class="primary">📷 Tag billede</button><button id="photoBtn">🖼️ Galleri</button><button id="photoDel" class="danger">Fjern</button></div><input type="file" id="photoIn" accept="image/*" hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>
+  <div class="card photo"><div id="photoBox"></div><div id="mkBar" style="display:none;margin:8px 0"></div><div class="row"><button id="camBtn" class="primary">📷 Tag billede</button><button id="photoBtn">🖼️ Galleri</button><button id="mkBtn">📍 Markér</button><button id="photoDel" class="danger">Fjern</button></div><input type="file" id="photoIn" accept="image/*" hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>
 
   <div class="card" id="list"></div>
+
+  <div class="row" style="margin-top:12px"><a class="btn" href="/api/export?format=csv" download>⬇ Eksportér CSV</a><a class="btn" href="/api/export?format=json&amp;download=1" download>⬇ Eksportér JSON</a></div>
 
   <div class="row" style="margin-top:12px">
     <button id="copyBtn" class="primary" style="flex:1">Kopiér som tekst</button>
     <button id="delBtn" class="danger">Slet dåse</button>
   </div>
+<p class="legend" style="margin-top:18px">Version 10 · <a href="#" id="upd" style="color:var(--muted)">Tving opdatering</a></p>
 </main>
 
 <div id="login"><form id="lf" class="box"><h1>PL-dåse</h1><input type="text" id="lu" placeholder="Brugernavn" autocomplete="username" autocapitalize="none" required><input type="password" id="lp" placeholder="Kodeord" autocomplete="current-password" required><button class="primary">Log ind</button><p id="err"></p></form></div>
@@ -102,13 +111,14 @@ var FN=[
  {k:"Andet",c:"hsl(220,10%,45%)",s:"Andet"}
 ];
 var CABLES=["NOMP 3G1,5","NOMP 3G2,5","NOMP 4G1,5","NOMP 5G1,5","NOMP 2×1,5","Signal 2×0,75"];
-var S=load()||{cur:null,boxes:[],rev:0};S.rev=S.rev||0;S.boxes.forEach(function(b){if(b.v===undefined){b.v=1;b.sv=0}});function vis(){return S.boxes.filter(function(b){return !b.deleted})}
-if(!vis().length){addBox();}
-if(!S.cur||!getBox())S.cur=vis()[0].id;
+var S={cur:null,boxes:[],rev:0};function vis(){return S.boxes.filter(function(b){return !b.deleted})}
+
+
 var editIdx=-1,draft=null;
 
 function load(){try{return JSON.parse(localStorage.getItem("pl-daase")||"null")}catch(e){return null}}
-function save(){try{localStorage.setItem("pl-daase",JSON.stringify(S))}catch(e){}queueSync()}
+function save(){flush();queueSync();if(user)stat("Gemt · sender …")}
+function saveSoon(){clearTimeout(pt);pt=setTimeout(flush,300);queueSync()}
 function addBox(){
   var b={id:"b"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:"Dåse "+(vis().length+1),ref:"Mod døren",entries:[],v:1,sv:0};
   for(var i=0;i<6;i++)b.entries.push({fn:"",cable:"",note:""});
@@ -128,29 +138,24 @@ function render(){if(!getBox()){if(!vis().length)addBox();S.cur=vis()[0].id}
   drawSvg(b);drawList(b);drawPhoto(b);
 }
 function drawSvg(b){
-  var cx=160,cy=172,R=80,ER=23,out="";
+  var cx=160,cy=172,R=80,ER=23,out="",ear='" y="'+(cy-28)+'" width="18" height="56" rx="5" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
+  out+='<rect x="'+(cx-R-18)+ear+'<rect x="'+(cx+R)+ear;
   out+='<circle cx="'+cx+'" cy="'+cy+'" r="'+R+'" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
-  out+='<rect x="'+(cx-R-18)+'" y="'+(cy-28)+'" width="18" height="56" rx="5" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
-  out+='<rect x="'+(cx+R)+'" y="'+(cy-28)+'" width="18" height="56" rx="5" fill="var(--box)" stroke="var(--boxline)" stroke-width="2"/>';
-  out+='<text x="'+cx+'" y="16" text-anchor="middle" font-size="13" fill="var(--muted)">▲ '+esc(b.ref||"op")+'</text>';
+  out+='<text x="'+cx+'" y="16" text-anchor="middle" font-size="13" fill="var(--muted)">▲ '+esc(b.ref||"foran dig")+'</text>';
   for(var i=0;i<6;i++){
-    var g=i<3?0:1,k=i%3;
-    var ex=cx+(k-1)*52,ey=g?cy+R+12:cy-R-12;
+    var g=i<3?0:1,k=i%3,ex=cx+(k-1)*52,ey=g?cy+R+12:cy-R-12,ly=g?cy+R-26:cy-R+26;
     var e=b.entries[i],f=fnOf(e.fn);
-    var fill=f?f.c:"var(--card)";
-    var stroke=f?"none":"var(--boxline)";
-    var tc=f?"#fff":"var(--muted)";
+    var fill=f?f.c:"var(--card)",stroke=f?"none":"var(--boxline)",tc=f?"#fff":"var(--muted)";
     out+='<g data-i="'+i+'" style="cursor:pointer">';
     out+='<circle cx="'+ex+'" cy="'+ey+'" r="'+ER+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2" stroke-dasharray="'+(f?"0":"4 3")+'"/>';
     out+='<text x="'+ex+'" y="'+(ey+7)+'" text-anchor="middle" font-size="20" font-weight="700" fill="'+tc+'">'+(i+1)+'</text>';
-    if(f){
-      var ix=ex,iy=g?cy+R-26:cy-R+26;
-      out+='<text x="'+ix+'" y="'+(iy+4)+'" text-anchor="middle" font-size="11" fill="var(--fg)">'+esc(f.s)+'</text>';
-    }
+    if(f)out+='<text x="'+ex+'" y="'+(ly+4)+'" text-anchor="middle" font-size="11" fill="var(--fg)">'+esc(f.s)+'</text>';
     out+='</g>';
   }
-  var s=$("draw");s.innerHTML=out;
-  var gs=s.querySelectorAll("g");
+  out+='<ellipse cx="'+cx+'" cy="316" rx="20" ry="8" fill="var(--boxline)"/><circle cx="'+cx+'" cy="314" r="7" fill="var(--muted)"/><path d="M'+cx+' 300 L'+(cx-5)+' 308 L'+(cx+5)+' 308Z" fill="var(--muted)"/>';
+  out+='<text x="'+(cx+30)+'" y="320" font-size="12" fill="var(--muted)">Du står her</text>';
+  var sv=$("draw");sv.innerHTML=out;
+  var gs=sv.querySelectorAll("g[data-i]");
   for(var j=0;j<gs.length;j++)gs[j].onclick=function(){openSheet(+this.getAttribute("data-i"))};
 }
 function drawList(b){
@@ -171,7 +176,7 @@ function openSheet(i){
   var b=getBox();editIdx=i;
   draft={fn:b.entries[i].fn,cable:b.entries[i].cable,note:b.entries[i].note};
   var p=$("panel");
-  var h='<h2>Indføring '+(i+1)+'</h2><div style="color:var(--muted);font-size:.85rem">Set nedefra</div>';
+  var h='<h2>Indføring '+(i+1)+'</h2><div style="color:var(--muted);font-size:.85rem">'+esc(b.name)+(b.ref?" · "+esc(b.ref):"")+'</div>';
   h+='<label class="small">Funktion</label><div class="chips" id="fnChips"></div>';
   h+='<label class="small">Kabeltype</label><div class="chips" id="cbChips"></div>';
   h+='<input type="text" id="cbIn" placeholder="Kabeltype (fri tekst)" style="margin-top:8px">';
@@ -204,18 +209,52 @@ function chips(skipCable){
 function closeSheet(){$("sheet").className=""}
 $("sheet").onclick=function(e){if(e.target===this)closeSheet()};
 
+var mk={on:false,sel:0};
+function wrapHtml(b,live){
+  var m=b.marks||[],t='<div class="pw'+(live&&mk.on?' edit':'')+'"><img src="'+b.photo+'" alt="Billede af dåsen">';
+  for(var i=0;i<6;i++){var p=m[i];if(!p)continue;var f=fnOf(b.entries[i].fn);
+    t+='<span class="mk'+(live&&mk.on&&mk.sel===i?' sel':'')+'" data-i="'+i+'" style="left:'+p.x*100+'%;top:'+p.y*100+'%;background:'+(f?f.c:'var(--boxline)')+'">'+(i+1)+'</span>'}
+  return t+'</div>';
+}
+function openLight(b){$("panel").innerHTML='<div style="text-align:center">'+wrapHtml(b,false)+'</div><div class="actions"><button id="cl" class="primary">Luk</button></div>';$("cl").onclick=closeSheet;$("sheet").className="open"}
 function drawPhoto(b){
-  var bx=$("photoBox");bx.innerHTML="";
-  if(b.photo){
-    var im=document.createElement("img");im.src=b.photo;im.alt="Billede af dåsen";
-    im.onclick=function(){$("panel").innerHTML='<img src="'+b.photo+'" style="width:100%;border-radius:10px" alt=""><div class="actions"><button id="cl" class="primary">Luk</button></div>';$("cl").onclick=closeSheet;$("sheet").className="open"};
-    bx.appendChild(im);
-  }else{
-    var p=document.createElement("div");p.style.cssText="color:var(--muted);font-size:.9rem;padding:6px 2px";p.textContent="Intet billede tilknyttet.";bx.appendChild(p);
+  var bx=$("photoBox"),bar=$("mkBar");
+  if(!b.photo){mk.on=false;bx.innerHTML='<div style="color:var(--muted);font-size:.9rem;padding:6px 2px">Intet billede tilknyttet.</div>'}
+  else{
+    bx.innerHTML='<div style="text-align:center">'+wrapHtml(b,true)+'</div>';
+    var pw=bx.querySelector(".pw"),im=pw.querySelector("img");
+    pw.onclick=function(e){
+      var t=e.target;
+      if(t.classList.contains("mk")){var i=+t.getAttribute("data-i");if(mk.on){mk.sel=i;drawPhoto(b)}else openSheet(i);return}
+      if(!mk.on){openLight(b);return}
+      var r=im.getBoundingClientRect();
+      var x=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
+      b.marks=(b.marks||[]).slice();while(b.marks.length<6)b.marks.push(null);
+      b.marks[mk.sel]={x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000};
+      for(var k=1;k<=6;k++){var j=(mk.sel+k)%6;if(!b.marks[j]){mk.sel=j;break}}
+      touch(b);save();drawPhoto(b);
+    };
   }
   $("camBtn").textContent=b.photo?"📷 Tag nyt billede":"📷 Tag billede";
   $("photoDel").style.display=b.photo?"":"none";
+  $("mkBtn").style.display=b.photo?"":"none";
+  $("mkBtn").textContent=mk.on?"✓ Færdig":"📍 Markér";
+  bar.style.display=(b.photo&&mk.on)?"":"none";
+  if(b.photo&&mk.on){
+    var m=b.marks||[],t='<div style="font-size:.85rem;color:var(--muted);margin-bottom:6px">Vælg nummer, og tryk på billedet, hvor indføringen sidder. Tryk igen for at flytte.</div><div class="chips">';
+    for(var i=0;i<6;i++)t+='<button class="chip'+(mk.sel===i?' on':'')+'" data-i="'+i+'">'+(i+1)+(m[i]?' ✓':'')+'</button>';
+    t+='<button class="chip danger" id="mkDel">Fjern markør</button></div>';
+    bar.innerHTML=t;
+    var cs=bar.querySelectorAll("button[data-i]");
+    for(var q=0;q<cs.length;q++)cs[q].onclick=function(){mk.sel=+this.getAttribute("data-i");drawPhoto(b)};
+    $("mkDel").onclick=function(){if(b.marks&&b.marks[mk.sel]){b.marks=b.marks.slice();b.marks[mk.sel]=null;touch(b);save();drawPhoto(b)}};
+  }
 }
+$("mkBtn").onclick=function(){
+  var b=getBox();mk.on=!mk.on;
+  if(mk.on){var m=b.marks||[],f=0;for(var i=0;i<6;i++)if(!m[i]){f=i;break}mk.sel=f}
+  drawPhoto(b);
+};
 $("photoBtn").onclick=function(){$("photoIn").click()};
 $("camBtn").onclick=function(){$("camIn").click()};
 $("camIn").onchange=$("photoIn").onchange=function(){
@@ -225,11 +264,11 @@ $("camIn").onchange=$("photoIn").onchange=function(){
   r.onload=function(){
     var img=new Image();
     img.onload=function(){
-      var s=Math.min(1,900/Math.max(img.width,img.height));
+      var s=Math.min(1,1400/Math.max(img.width,img.height));
       var c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-      var old=box.photo;box.photo=c.toDataURL("image/jpeg",0.72);touch(box);
-      try{localStorage.setItem("pl-daase",JSON.stringify(S));drawPhoto(box);toast("Billede gemt");queueSync()}
+      var old=box.photo;box.photo=c.toDataURL("image/jpeg",0.8);box.marks=[];touch(box);
+      try{save();drawPhoto(box);toast("Billede gemt")}
       catch(e){box.photo=old;drawPhoto(box);toast("Kunne ikke gemme – for lidt plads")}
     };
     img.onerror=function(){toast("Kunne ikke læse billedet")};
@@ -237,11 +276,11 @@ $("camIn").onchange=$("photoIn").onchange=function(){
   };
   r.readAsDataURL(f);
 };
-$("photoDel").onclick=function(){var b=getBox();delete b.photo;touch(b);save();drawPhoto(b)};
-$("boxSel").onchange=function(){S.cur=this.value;save();render()};
+$("photoDel").onclick=function(){var b=getBox();delete b.photo;delete b.marks;touch(b);save();drawPhoto(b)};
+$("boxSel").onchange=function(){S.cur=this.value;mk.on=false;save();render()};
 $("newBtn").onclick=function(){addBox();render()};
-$("boxName").oninput=function(){getBox().name=this.value;touch(getBox());save();var o=$("boxSel").options[$("boxSel").selectedIndex];if(o)o.textContent=this.value||"(uden navn)"};
-$("refTxt").oninput=function(){getBox().ref=this.value;touch(getBox());save();drawSvg(getBox())};
+$("boxName").oninput=function(){getBox().name=this.value;touch(getBox());saveSoon();var o=$("boxSel").options[$("boxSel").selectedIndex];if(o)o.textContent=this.value||"(uden navn)"};
+$("refTxt").oninput=function(){getBox().ref=this.value;touch(getBox());saveSoon();drawSvg(getBox())};
 $("delBtn").onclick=function(){
   if(!confirm("Slet denne dåse?"))return;
   var d=getBox();d.deleted=true;delete d.photo;touch(d);
@@ -264,12 +303,57 @@ $("copyBtn").onclick=function(){
     $("ta").value=t;$("cl").onclick=closeSheet;$("sheet").className="open";$("ta").select();
   }
 };
-render();
+var DB=null,stored=new WeakMap(),known={},pt=null,pw=Promise.resolve();
+function dbOpen(){return new Promise(function(res,rej){var r=indexedDB.open("pl-daase",1);r.onupgradeneeded=function(){r.result.createObjectStore("boxes",{keyPath:"id"});r.result.createObjectStore("meta")};r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}})}
+function dbReq(store,fn){return new Promise(function(res,rej){var r=fn(DB.transaction(store).objectStore(store));r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)}})}
+function sigOf(b){return b.v+"|"+b.sv+"|"+(b.deleted?1:0)}
+function persist(){
+  if(!DB){try{localStorage.setItem("pl-daase",JSON.stringify(S))}catch(e){}return Promise.resolve(false)}
+  var ws=[],now={};
+  S.boxes.forEach(function(b){now[b.id]=1;var g=sigOf(b);if(stored.get(b)!==g)ws.push([b,g])});
+  var dels=Object.keys(known).filter(function(id){return !now[id]});
+  var meta={cur:S.cur,rev:S.rev,user:S.user||""};
+  return new Promise(function(res){
+    try{
+      var tx=DB.transaction(["boxes","meta"],"readwrite"),bs=tx.objectStore("boxes");
+      ws.forEach(function(w){bs.put(w[0])});
+      dels.forEach(function(id){bs.delete(id)});
+      tx.objectStore("meta").put(meta,"s");
+      tx.oncomplete=function(){ws.forEach(function(w){stored.set(w[0],w[1]);known[w[0].id]=1});dels.forEach(function(id){delete known[id]});res(true)};
+      tx.onerror=tx.onabort=function(){res(false)};
+    }catch(e){res(false)}
+  });
+}
+function flush(){clearTimeout(pt);pw=pw.then(persist)}
+function wipeDb(){known={};stored=new WeakMap();if(!DB)return;try{var tx=DB.transaction(["boxes","meta"],"readwrite");tx.objectStore("boxes").clear();tx.objectStore("meta").clear()}catch(e){}}
+async function boot(){
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+  var loaded=false,old=null;
+  try{
+    DB=await dbOpen();
+    var meta=await dbReq("meta",function(o){return o.get("s")}),bs=await dbReq("boxes",function(o){return o.getAll()});
+    if(meta||bs.length){
+      S={cur:meta&&meta.cur||null,rev:meta&&meta.rev||0,user:meta&&meta.user||"",boxes:bs};
+      bs.forEach(function(b){known[b.id]=1;stored.set(b,sigOf(b))});loaded=true;
+    }
+  }catch(e){DB=null}
+  if(!loaded){
+    old=load();
+    if(old&&old.boxes&&old.boxes.length){S=old;S.rev=S.rev||0;S.boxes.forEach(function(b){if(b.v===undefined){b.v=1;b.sv=0}})}else old=null;
+  }
+  user=S.user||"";$("who").textContent=user;
+  if(!vis().length)addBox();
+  if(!getBox())S.cur=vis()[0].id;
+  render();$("app").style.visibility="visible";
+  var ok=await persist();
+  if(old&&DB&&ok){try{localStorage.removeItem("pl-daase")}catch(e){}}
+  start();
+}
 function touch(b){b.v=(b.v||0)+1}
 function blank(b){return !b.deleted&&!b.photo&&/^Dåse \d+$/.test(b.name)&&b.entries.every(function(e){return !e.fn&&!e.cable&&!e.note})}
 function pending(b){return b.v!==b.sv&&!(b.sv===0&&blank(b))}
 function dirty(){return S.boxes.some(pending)}
-var user=S.user||"",timer=null,syncing=false;
+var user="",timer=null,syncing=false;
 function stat(t,warn){$("stat").textContent=t;$("stat").style.color=warn?"#d1242f":""}
 function queueSync(){clearTimeout(timer);timer=setTimeout(sync,1500)}
 function api(path,body){return fetch(path,{method:body?"POST":"GET",headers:{"Content-Type":"application/json","X-PL":"1"},credentials:"same-origin",body:body?JSON.stringify(body):undefined})}
@@ -279,26 +363,27 @@ async function sync(){
   syncing=true;
   try{
     var first=S.rev===0;
-    var sent=S.boxes.filter(pending).map(function(b){return {b:b,v:b.v}});
-    var changes=sent.map(function(x){var b=x.b;return b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,entries:b.entries,photo:b.photo||""}});
+    var sent=[],changes=[],size=0;
+    S.boxes.filter(pending).forEach(function(b){if(sent.length&&size>6e6)return;size+=(b.photo||"").length+600;sent.push({b:b,v:b.v});changes.push(b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,marks:b.marks||[],entries:b.entries,photo:b.photo||""})});
+    
     var r=await api("/api/sync",{since:S.rev,changes:changes});
     if(r.status===401){user="";showLogin("Log ind igen");return}
     if(!r.ok)throw 0;
-    var d=await r.json();
-    sent.forEach(function(x){if(x.b.v===x.v)x.b.sv=x.v});
+    var d=await r.json(),rjs=d.rejected||[];
+    sent.forEach(function(x){if(x.b.v===x.v&&rjs.indexOf(x.b.id)<0)x.b.sv=x.v});
     d.boxes.forEach(function(sb){
       var lb=S.boxes.filter(function(b){return b.id===sb.id})[0];
       if(lb&&lb.v!==lb.sv)return;
       if(lb)S.boxes.splice(S.boxes.indexOf(lb),1);
-      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
+      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,marks:sb.marks||[],entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
     });
     S.boxes=S.boxes.filter(function(b){return !(b.deleted&&b.v===b.sv)});
     if(first&&S.boxes.some(function(b){return !b.deleted&&!blank(b)}))S.boxes=S.boxes.filter(function(b){return !(b.sv===0&&b.v>0&&blank(b))});
     S.rev=d.rev;
-    try{localStorage.setItem("pl-daase",JSON.stringify(S))}catch(e){}
+    flush();
     render();
-    stat("✓ Synkroniseret");
-    if(dirty())queueSync();
+    if(rjs.length)stat("⚠ "+rjs.length+" dåse(r) afvist af serveren",true);
+    else{stat("✓ Synkroniseret");if(dirty())queueSync()}
   }catch(e){stat("Offline – ændringer sendes senere",true)}
   finally{syncing=false}
 }
@@ -318,7 +403,7 @@ $("lf").onsubmit=async function(e){
 $("outBtn").onclick=async function(){
   if(dirty()&&!confirm("Der er ændringer, som ikke er sendt til serveren. Log ud alligevel?"))return;
   try{await api("/api/logout",{})}catch(e){}
-  try{localStorage.removeItem("pl-daase")}catch(e){}
+  clearTimeout(pt);wipeDb();
   S={cur:null,boxes:[],rev:0,user:""};user="";$("who").textContent="";stat("");showLogin("");
 };
 async function start(){
@@ -328,10 +413,14 @@ async function start(){
     var d=await r.json();user=S.user=d.user;$("who").textContent=user;sync();
   }catch(e){if(S.user){user=S.user;$("who").textContent=user;stat("Offline",true)}}
 }
+$("upd").onclick=async function(e){e.preventDefault();try{var rs=await navigator.serviceWorker.getRegistrations();for(var i=0;i<rs.length;i++)await rs[i].unregister();var ks=await caches.keys();for(var j=0;j<ks.length;j++)await caches.delete(ks[j])}catch(x){}flush();setTimeout(function(){location.reload()},400)};
+window.addEventListener("error",function(e){toast("Fejl: "+(e.message||"ukendt"))});
+window.addEventListener("unhandledrejection",function(e){toast("Fejl: "+((e.reason&&e.reason.message)||e.reason))});
 window.addEventListener("online",sync);
-document.addEventListener("visibilitychange",function(){if(!document.hidden)sync()});
+document.addEventListener("visibilitychange",function(){if(document.hidden)flush();else sync()});
+window.addEventListener("pagehide",flush);
 setInterval(function(){if(dirty())sync()},30000);
-start();
+boot().catch(function(){$("app").style.visibility="visible"});
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
 </script>
 </body>
