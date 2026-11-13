@@ -93,7 +93,7 @@ a.btn{flex:1;text-align:center;text-decoration:none;background:var(--card);borde
     <button id="copyBtn" class="primary" style="flex:1">Kopiér som tekst</button>
     <button id="delBtn" class="danger">Slet dåse</button>
   </div>
-<p class="legend" style="margin-top:18px">Version 10 · <a href="#" id="upd" style="color:var(--muted)">Tving opdatering</a></p>
+<p class="legend" style="margin-top:18px">Version 11 · <a href="#" id="upd" style="color:var(--muted)">Tving opdatering</a></p>
 </main>
 
 <div id="login"><form id="lf" class="box"><h1>PL-dåse</h1><input type="text" id="lu" placeholder="Brugernavn" autocomplete="username" autocapitalize="none" required><input type="password" id="lp" placeholder="Kodeord" autocomplete="current-password" required><button class="primary">Log ind</button><p id="err"></p></form></div>
@@ -128,7 +128,7 @@ function getBox(){for(var i=0;i<S.boxes.length;i++)if(S.boxes[i].id===S.cur&&!S.
 function fnOf(k){for(var i=0;i<FN.length;i++)if(FN[i].k===k)return FN[i];return null}
 function $(id){return document.getElementById(id)}
 function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML}
-function toast(m){var t=$("toast");t.textContent=m;t.className="show";setTimeout(function(){t.className=""},1600)}
+function toast(m){var t=$("toast");t.textContent=m;t.className="show";setTimeout(function(){t.className=""},2800)}
 
 function render(){if(!getBox()){if(!vis().length)addBox();S.cur=vis()[0].id}
   var b=getBox();
@@ -145,11 +145,12 @@ function drawSvg(b){
   for(var i=0;i<6;i++){
     var g=i<3?0:1,k=i%3,ex=cx+(k-1)*52,ey=g?cy+R+12:cy-R-12,ly=g?cy+R-26:cy-R+26;
     var e=b.entries[i],f=fnOf(e.fn);
-    var fill=f?f.c:"var(--card)",stroke=f?"none":"var(--boxline)",tc=f?"#fff":"var(--muted)";
+    var has=!f&&(e.cable||e.note),fill=f?f.c:"var(--card)",stroke=f?"none":(has?"#c98a00":"var(--boxline)"),tc=f?"#fff":(has?"#c98a00":"var(--muted)");
     out+='<g data-i="'+i+'" style="cursor:pointer">';
-    out+='<circle cx="'+ex+'" cy="'+ey+'" r="'+ER+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2" stroke-dasharray="'+(f?"0":"4 3")+'"/>';
+    out+='<circle cx="'+ex+'" cy="'+ey+'" r="'+ER+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2" stroke-dasharray="'+(f||has?"0":"4 3")+'"/>';
     out+='<text x="'+ex+'" y="'+(ey+7)+'" text-anchor="middle" font-size="20" font-weight="700" fill="'+tc+'">'+(i+1)+'</text>';
     if(f)out+='<text x="'+ex+'" y="'+(ly+4)+'" text-anchor="middle" font-size="11" fill="var(--fg)">'+esc(f.s)+'</text>';
+    else if(has)out+='<text x="'+ex+'" y="'+(ly+4)+'" text-anchor="middle" font-size="11" fill="#c98a00">'+(e.cable?"Kabel":"Note")+'</text>';
     out+='</g>';
   }
   out+='<ellipse cx="'+cx+'" cy="316" rx="20" ry="8" fill="var(--boxline)"/><circle cx="'+cx+'" cy="314" r="7" fill="var(--muted)"/><path d="M'+cx+' 300 L'+(cx-5)+' 308 L'+(cx+5)+' 308Z" fill="var(--muted)"/>';
@@ -162,8 +163,8 @@ function drawList(b){
   var h="";
   for(var i=0;i<6;i++){
     var e=b.entries[i],f=fnOf(e.fn);
-    var bg=f?f.c:"var(--boxline)";
-    var title=f?esc(e.fn):"Ikke registreret";
+    var bg=f?f.c:((e.cable||e.note)?"#c98a00":"var(--boxline)");
+    var title=f?esc(e.fn):((e.cable||e.note)?"Funktion ikke valgt":"Ikke registreret");
     var sub=[e.cable,e.note].filter(Boolean).map(esc).join(" · ");
     h+='<div class="item" data-i="'+i+'"><div class="dot" style="background:'+bg+'">'+(i+1)+'</div><div><b>'+title+'</b><span>'+(sub||"–")+'</span></div></div>';
   }
@@ -177,7 +178,7 @@ function openSheet(i){
   draft={fn:b.entries[i].fn,cable:b.entries[i].cable,note:b.entries[i].note};
   var p=$("panel");
   var h='<h2>Indføring '+(i+1)+'</h2><div style="color:var(--muted);font-size:.85rem">'+esc(b.name)+(b.ref?" · "+esc(b.ref):"")+'</div>';
-  h+='<label class="small">Funktion</label><div class="chips" id="fnChips"></div>';
+  h+='<label class="small">Funktion (giver farve på tegningen)</label><div class="chips" id="fnChips"></div>';
   h+='<label class="small">Kabeltype</label><div class="chips" id="cbChips"></div>';
   h+='<input type="text" id="cbIn" placeholder="Kabeltype (fri tekst)" style="margin-top:8px">';
   h+='<label class="small">Note (fra/til, farver, osv.)</label><input type="text" id="noteIn" placeholder="fx til kontakt ved dør">';
@@ -189,7 +190,7 @@ function openSheet(i){
   $("noteIn").oninput=function(){draft.note=this.value};
   $("cancel").onclick=closeSheet;
   $("clr").onclick=function(){getBox().entries[editIdx]={fn:"",cable:"",note:""};touch(getBox());save();closeSheet();render()};
-  $("ok").onclick=function(){getBox().entries[editIdx]={fn:draft.fn,cable:draft.cable.trim(),note:draft.note.trim()};touch(getBox());save();closeSheet();render()};
+  $("ok").onclick=function(){getBox().entries[editIdx]={fn:draft.fn,cable:draft.cable.trim(),note:draft.note.trim()};touch(getBox());save();closeSheet();render();if(!draft.fn&&(draft.cable.trim()||draft.note.trim()))toast("Tip: Vælg en funktion, så får indføringen farve")};
   $("sheet").className="open";
 }
 function chips(skipCable){
