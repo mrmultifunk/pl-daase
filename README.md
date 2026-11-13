@@ -36,6 +36,7 @@ En lille webapp (PWA) til at registrere, hvilke kabler der kommer ind i en dansk
 - Vælg dåse i rullemenuen øverst. **+ Ny** opretter en ny dåse.
 - Giv dåsen et navn eller en placering i feltet **Navn / placering**, fx „Stue, loft ved vindue“.
 - **Slet dåse** sletter den aktuelle dåse (også på serveren og på dine andre enheder).
+- Feltet **Note til dåsen** er en fri tekst til hele dåsen, fx „svær at komme til“ eller „dåse bag gips“. Den følger med i eksporten.
 
 ### Sådan tæller du indføringerne
 
@@ -56,21 +57,23 @@ Tryk på en indføring i tegningen eller på listen under den:
 
 | Felt | Beskrivelse |
 | --- | --- |
-| Funktion | Forsyning, Lampe, Afbryder, Stikkontakt, Korrespondance, Videre til dåse eller Andet |
+| Funktion | Forsyning, Lampe, Afbryder, Stikkontakt, Korrespondance, Videre til dåse, Tom / ikke tilsluttet eller Andet |
 | Kabeltype | Hurtigvalg (fx NOMP 3G1,5) eller fri tekst |
 | Note | Fri tekst, fx „til kontakt ved dør“ |
 
-Funktionen giver indføringen en farve i tegningen. **Ryd** nulstiller indføringen.
+Funktionen giver indføringen en farve i tegningen. En indføring med kabel eller note, men uden funktion, vises med en gul ring og „Funktion ikke valgt“ i listen. **Tom / ikke tilsluttet** vises som en grå ring og bruges til indføringer uden kabel eller uden tilslutning. **Ryd** nulstiller indføringen.
+
+Knappen **Sæt resterende uregistrerede til „Tom / ikke tilsluttet“** under listen markerer alle indføringer, der endnu ikke er udfyldt, som tomme, så du ikke skal åbne dem én ad gangen.
 
 ### Billede og markører
 
-1. Tag et billede med **📷 Tag billede** (åbner kameraet direkte) eller vælg fra galleriet med **🖼️ Galleri**.
-2. Tryk på **📍 Markér**, vælg et nummer (1-6), og tryk på billedet, hvor indføringen sidder. Appen går automatisk videre til næste nummer uden markør. Tryk igen for at flytte en markør, eller brug **Fjern markør**.
+1. Tag et billede med **📷 Tag billede** (åbner kameraet direkte) eller vælg fra galleriet med **🖼️ Galleri**. Du kan tilføje op til **10 billeder** pr. dåse, fx fra flere vinkler eller før og efter. Er der mere end ét, skifter du mellem dem med knapperne **Billede 1/3** osv. **Fjern** sletter det billede, du kigger på.
+2. Tryk på **📍 Markér**. Markørerne hører til det billede, du kigger på, så hvert billede har sine egne. Vælg et nummer (1-6), og tryk på billedet, hvor indføringen sidder. Appen går automatisk videre til næste nummer uden markør. Tryk igen for at flytte en markør, eller brug **Fjern markør**.
 3. Tryk **✓ Færdig**.
 
 Markørerne har samme farve som funktionen. Uden for markér-tilstand åbner et tryk på en markør indføringen, og et tryk et andet sted på billedet viser det i stor størrelse.
 
-Billedet skaleres ned til højst 1400 pixel på den længste side (JPEG, kvalitet 80 %), før det gemmes. Tager du et nyt billede, fjernes markørerne fra det gamle.
+Billedet skaleres ned til højst 1400 pixel på den længste side (JPEG, kvalitet 80 %), før det gemmes. Billederne sendes kun til serveren én gang. Senere ændringer sender kun teksten og markørerne.
 
 ### Offline og synkronisering
 
@@ -193,7 +196,8 @@ I en browser, hvor du er logget ind, virker adresserne også uden token (via log
 | `GET /api/export?format=csv` | Alle dåser som CSV |
 | `GET /api/export?photos=1` | JSON med billederne som base64 inkluderet |
 | `GET /api/export?download=1` | JSON som filoverførsel (`pl-daase.json`) |
-| `GET /api/photo/<id>` | Billedet til en dåse som `image/jpeg` |
+| `GET /api/photo/<dåse-id>` | Dåsens første billede som `image/jpeg` |
+| `GET /api/photo/<dåse-id>/<billede-id>` | Et bestemt billede som `image/jpeg` |
 
 Adresserne `/api/login`, `/api/logout`, `/api/me` og `/api/sync` bruges kun af selve appen og er ikke en stabil API.
 
@@ -209,6 +213,7 @@ Adresserne `/api/login`, `/api/logout`, `/api/me` og `/api/sync` bruges kun af s
       "id": "babc123",
       "name": "Stue",
       "ref": "Mod døren",
+      "note": "Svær at komme til",
       "entries": [
         {
           "position": 1,
@@ -225,7 +230,14 @@ Adresserne `/api/login`, `/api/logout`, `/api/me` og `/api/sync` bruges kun af s
           "marker": null
         }
       ],
-      "photo_url": "https://pl.dit-domæne.dk/api/photo/babc123"
+      "photo_url": "https://pl.dit-domæne.dk/api/photo/babc123",
+      "photos": [
+        {
+          "id": "p1",
+          "url": "https://pl.dit-domæne.dk/api/photo/babc123/p1",
+          "markers": [{ "position": 1, "x": 0.331, "y": 0.149 }]
+        }
+      ]
     }
   ]
 }
@@ -237,11 +249,13 @@ Adresserne `/api/login`, `/api/logout`, `/api/me` og `/api/sync` bruges kun af s
 | `name` | Navn eller placering |
 | `ref` | Hvad man står med ansigtet mod, når man tæller (se [Sådan tæller du indføringerne](#sådan-tæller-du-indføringerne)) |
 | `entries` | Altid 6 indføringer med `position` fra 1 til 6 |
-| `function` | Funktion, fx `Forsyning`, `Lampe`, `Afbryder`, `Stikkontakt`, `Korrespondance`, `Videre til dåse`, `Andet`. Tom, hvis indføringen ikke er registreret. |
+| `function` | Funktion, fx `Forsyning`, `Lampe`, `Afbryder`, `Stikkontakt`, `Korrespondance`, `Videre til dåse`, `Tom / ikke tilsluttet`, `Andet`. Tom streng, hvis indføringen ikke er registreret. |
 | `cable` | Kabeltype som tekst |
 | `note` | Fri tekst |
-| `marker` | Placering på billedet som brøkdel af bredde (`x`, fra venstre) og højde (`y`, fra toppen), eller `null` |
-| `photo_url` | Adresse til billedet (kræver samme godkendelse), eller `null` uden billede. Med `?photos=1` følger billedet med i feltet `photo` som `data:image/jpeg;base64,...`. |
+| `note` (på dåsen) | Fri note til hele dåsen. Tom streng, hvis der ingen er. |
+| `marker` (på indføringen) | Placering på dåsens **første** billede som brøkdel af bredde (`x`, fra venstre) og højde (`y`, fra toppen), eller `null`. Bevaret af hensyn til ældre programmer. |
+| `photo_url` | Adresse til dåsens første billede (kræver samme godkendelse), eller `null` uden billede |
+| `photos` | Alle billeder (op til 10). Hvert har `id`, `url` og `markers` (liste med `position` 1-6, `x` og `y`). Med `?photos=1` følger billedet med i feltet `data` som `data:image/jpeg;base64,...`. |
 
 Slettede dåser er ikke med. Dåserne er sorteret alfabetisk på navn.
 
@@ -249,12 +263,12 @@ Slettede dåser er ikke med. Dåserne er sorteret alfabetisk på navn.
 
 - Semikolon som skilletegn, UTF-8 med BOM, linjeskift `\r\n`
 - Én række pr. **udfyldt** indføring (tomme indføringer er ikke med)
-- Kolonner: `daase;op_mod;position;funktion;kabel;note;foto_x;foto_y`
+- Kolonner: `daase;op_mod;position;funktion;kabel;note;foto_x;foto_y;daase_note` (`foto_x` og `foto_y` er markøren på dåsens første billede, `daase_note` er dåsens note)
 
 ```
-daase;op_mod;position;funktion;kabel;note;foto_x;foto_y
-Stue;Mod døren;1;Lampe;NOMP 3G1,5;;0.33;0.15
-Stue;Mod døren;2;Forsyning;NOMP 3G1,5;;;
+daase;op_mod;position;funktion;kabel;note;foto_x;foto_y;daase_note
+Stue;Mod døren;1;Lampe;NOMP 3G1,5;;0.33;0.15;Svær at komme til
+Stue;Mod døren;2;Forsyning;NOMP 3G1,5;;;;Svær at komme til
 ```
 
 ### Fejlkoder
@@ -319,7 +333,7 @@ Alt ligger også som almindelige filer i mappen `data` ved siden af `docker-comp
 
 | Fil | Indhold |
 | --- | --- |
-| `data/boxes/<bruger>.json` | Dåser, kabler, markører og billeder (som base64) |
+| `data/boxes/<bruger>.json` | Dåser, noter, kabler, markører og billeder (som base64) |
 | `data/users.json` | Brugere (kodeord og token som hash) |
 | `data/secret` | Nøgle til login-cookies |
 
@@ -373,7 +387,7 @@ Kopiér mappen `data`. Det er det eneste, der skal tages backup af. Gendan ved a
 ### Begrænsninger
 
 - Højst 200 ændrede dåser pr. synkronisering og cirka 12 MB pr. forespørgsel. Større mængder sendes automatisk i flere omgange.
-- Billeder må højst være cirka 1,5 MB efter nedskalering.
+- Højst 10 billeder pr. dåse, og hvert billede må højst være cirka 1,5 MB efter nedskalering.
 - Eksport og API kræver, at serveren kan nås.
 
 ---

@@ -1,5 +1,5 @@
 // Hæv versionen, når du vil tvinge en opdatering ud
-var CACHE = "pl-daase-v11";
+var CACHE = "pl-daase-v13";
 var FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", function (e) {

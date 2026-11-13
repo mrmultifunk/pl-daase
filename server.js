@@ -40,12 +40,23 @@ setInterval(()=>{for(const[k,f]of fails)if(f.t<Date.now())fails.delete(k)},6e5).
 
 // ---- Lager: én JSON-fil pr. bruger i /data/boxes ----
 const dfile=u=>path.join(DATA,"boxes",(SHARED?"shared":u)+".json");
-function clean(c){
+const marks6=m=>Array.from({length:6},(_,i)=>{const k=Array.isArray(m)&&m[i];return k&&isFinite(k.x)&&isFinite(k.y)?{x:Math.min(1,Math.max(0,+k.x)),y:Math.min(1,Math.max(0,+k.y))}:null});
+const okImg=d=>typeof d==="string"&&d.startsWith("data:image/jpeg;base64,")&&d.length<2e6;
+const norm=b=>{if(b.deleted)return b;if(!b.photos){b.photos=b.photo?[{id:"p1",d:b.photo,marks:marks6(b.marks)}]:[];delete b.photo;delete b.marks}b.note=b.note||"";return b};
+function clean(c,old){
   if(!c||!/^b[0-9a-z]{3,40}$/.test(c.id))return null;
   if(c.deleted)return{id:c.id,deleted:true};
   if(!Array.isArray(c.entries)||c.entries.length!==6)return null;
-  const o={id:c.id,name:str(c.name,120),ref:str(c.ref,120),marks:Array.from({length:6},(_,i)=>{const m=Array.isArray(c.marks)&&c.marks[i];return m&&isFinite(m.x)&&isFinite(m.y)?{x:Math.min(1,Math.max(0,+m.x)),y:Math.min(1,Math.max(0,+m.y))}:null}),entries:c.entries.map(e=>({fn:str(e&&e.fn,40),cable:str(e&&e.cable,80),note:str(e&&e.note,200)}))};
-  if(typeof c.photo==="string"&&c.photo.startsWith("data:image/jpeg;base64,")&&c.photo.length<2e6)o.photo=c.photo;
+  const o={id:c.id,name:str(c.name,120),ref:str(c.ref,120),note:str(c.note,2000),
+    entries:c.entries.map(e=>({fn:str(e&&e.fn,40),cable:str(e&&e.cable,80),note:str(e&&e.note,200)})),photos:[],_m:[]};
+  const ps=Array.isArray(c.photos)?c.photos:(c.photo?[{id:"p1",d:c.photo,marks:c.marks}]:[]);
+  const prev={};if(old&&!old.deleted)for(const p of norm(old).photos)prev[p.id]=p;
+  for(const p of ps.slice(0,10)){
+    if(!p||!/^p[0-9a-z]{1,40}$/.test(p.id))continue;
+    const d=p.d!==undefined?p.d:(prev[p.id]&&prev[p.id].d);
+    if(!okImg(d)){if(p.d===undefined)o._m.push(p.id);continue}
+    o.photos.push({id:p.id,d,marks:marks6(p.marks)});
+  }
   return o;
 }
 const body=req=>new Promise((res,rej)=>{let n=0;const c=[];
@@ -54,38 +65,41 @@ const body=req=>new Promise((res,rej)=>{let n=0;const c=[];
 const send=(res,code,obj,h={})=>{res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store",...h});res.end(JSON.stringify(obj))};
 
 async function sync(req,res,s){
-  const b=await body(req),f=dfile(s.u),db=readJson(f,{rev:0,boxes:{}}),since=+b.since||0,mine=new Set(),bad=[];
-  for(const c of(Array.isArray(b.changes)?b.changes:[]).slice(0,200)){const o=clean(c);if(!o){bad.push(String(c&&c.id).slice(0,60));console.log("Afvist dåse fra "+s.u+":",c&&c.id);continue}o.rev=++db.rev;db.boxes[o.id]=o;mine.add(o.id)}
+  const b=await body(req),f=dfile(s.u),db=readJson(f,{rev:0,boxes:{}}),since=+b.since||0,mine=new Set(),bad=[],miss=[];
+  for(const c of(Array.isArray(b.changes)?b.changes:[]).slice(0,200)){const o=clean(c,db.boxes[c&&c.id]);if(o&&o._m){for(const id of o._m)miss.push(o.id+"/"+id);delete o._m}if(!o){bad.push(String(c&&c.id).slice(0,60));console.log("Afvist dåse fra "+s.u+":",c&&c.id);continue}o.rev=++db.rev;db.boxes[o.id]=o;mine.add(o.id)}
   writeJson(f,db);
   const h={};if(s.e-Date.now()<15*DAY)h["Set-Cookie"]=cookie(req,mk(s.u),DAYS*86400);
-  send(res,200,{rev:db.rev,rejected:bad,boxes:Object.values(db.boxes).filter(x=>x.rev>since&&!mine.has(x.id))},h);
+  send(res,200,{rev:db.rev,rejected:bad,missing:miss,boxes:Object.values(db.boxes).filter(x=>x.rev>since&&!mine.has(x.id)).map(norm)},h);
 }
 
 // ---- Eksport til andre programmer ----
-const live=u=>Object.values(readJson(dfile(u),{boxes:{}}).boxes).filter(b=>!b.deleted).sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
+const live=u=>Object.values(readJson(dfile(u),{boxes:{}}).boxes).filter(b=>!b.deleted).map(norm).sort((a,b)=>(a.name||"").localeCompare(b.name||"","da"));
 const csvq=v=>{v=String(v??"");return /[";\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
 function exportData(req,res,u,url){
   const q=url.searchParams,boxes=live(u),host=(req.headers["x-forwarded-proto"]||"http")+"://"+req.headers.host;
   if(q.get("format")==="csv"){
-    const rows=[["daase","op_mod","position","funktion","kabel","note","foto_x","foto_y"]];
-    for(const b of boxes)b.entries.forEach((e,i)=>{if(e.fn||e.cable||e.note){const m=b.marks&&b.marks[i];rows.push([b.name,b.ref,i+1,e.fn,e.cable,e.note,m?m.x:"",m?m.y:""])}});
+    const rows=[["daase","op_mod","position","funktion","kabel","note","foto_x","foto_y","daase_note"]];
+    for(const b of boxes)b.entries.forEach((e,i)=>{if(e.fn||e.cable||e.note){const m=b.photos[0]&&b.photos[0].marks[i];rows.push([b.name,b.ref,i+1,e.fn,e.cable,e.note,m?m.x:"",m?m.y:"",b.note||""])}});
     res.writeHead(200,{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":'attachment; filename="pl-daase.csv"',"Cache-Control":"no-store"});
     return res.end("\uFEFF"+rows.map(r=>r.map(csvq).join(";")).join("\r\n")+"\r\n");
   }
   const out={exported:new Date().toISOString(),user:u,
-    layout:"Positionerne er målt, som man står under dåsen med ansigtet mod ref: 1-3 er indføringerne foran en (venstre mod højre), 4-6 er bag en (venstre mod højre). marker er placeringen på billedet som brøkdel af bredde (x, fra venstre) og højde (y, fra toppen), eller null.",
-    boxes:boxes.map(b=>({id:b.id,name:b.name,ref:b.ref,
-      entries:b.entries.map((e,i)=>({position:i+1,function:e.fn,cable:e.cable,note:e.note,marker:(b.marks&&b.marks[i])||null})),
-      photo_url:b.photo?host+"/api/photo/"+b.id:null,...(q.get("photos")==="1"&&b.photo?{photo:b.photo}:{})}))};
+    layout:"Positionerne er målt, som man står under dåsen med ansigtet mod ref: 1-3 er indføringerne foran en (venstre mod højre), 4-6 er bag en (venstre mod højre). note er en fri note til hele dåsen. marker er placeringen på det første billede som brøkdel af bredde (x, fra venstre) og højde (y, fra toppen), eller null. photos indeholder alle billeder med deres markører.",
+    boxes:boxes.map(b=>({id:b.id,name:b.name,ref:b.ref,note:b.note||"",
+      entries:b.entries.map((e,i)=>({position:i+1,function:e.fn,cable:e.cable,note:e.note,marker:(b.photos[0]&&b.photos[0].marks[i])||null})),
+      photo_url:b.photos.length?host+"/api/photo/"+b.id:null,
+      photos:b.photos.map(p=>({id:p.id,url:host+"/api/photo/"+b.id+"/"+p.id,
+        markers:p.marks.map((m,i)=>m?{position:i+1,x:m.x,y:m.y}:null).filter(Boolean),
+        ...(q.get("photos")==="1"?{data:p.d}:{})}))}))};
   const h={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"};
   if(q.get("download")==="1")h["Content-Disposition"]='attachment; filename="pl-daase.json"';
   res.writeHead(200,h);res.end(JSON.stringify(out,null,2));
 }
-function photo(res,u,id){
-  const b=live(u).find(x=>x.id===id);
-  if(!b||!b.photo){res.writeHead(404);return res.end()}
+function photo(res,u,rest){
+  const[bid,pid]=rest.split("/"),b=live(u).find(x=>x.id===bid),p=b&&(pid?b.photos.find(x=>x.id===pid):b.photos[0]);
+  if(!p){res.writeHead(404);return res.end()}
   res.writeHead(200,{"Content-Type":"image/jpeg","Cache-Control":"private, max-age=300"});
-  res.end(Buffer.from(b.photo.split(",")[1],"base64"));
+  res.end(Buffer.from(p.d.split(",")[1],"base64"));
 }
 
 // ---- Statiske filer ----

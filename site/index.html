@@ -60,6 +60,8 @@ textarea{width:100%;height:140px;background:var(--card);color:var(--fg);border:1
 #login input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
 #login button{width:100%}
 a.btn{flex:1;text-align:center;text-decoration:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;color:var(--fg)}
+#boxNote{height:auto;font:inherit;margin:0;padding:10px 12px}
+.th{margin-top:8px}
 #err{color:#d1242f;min-height:1.2em;font-size:.9rem}
 .bar{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--muted);margin:-6px 0 10px}
 .bar button{padding:4px 10px;font-size:.8rem}
@@ -77,15 +79,19 @@ a.btn{flex:1;text-align:center;text-decoration:none;background:var(--card);borde
   <input type="text" id="boxName" placeholder="fx Stue, loft ved vindue">
   <label class="small" for="refTxt">Jeg står med ansigtet mod (indføring 1-3 er foran mig)</label>
   <input type="text" id="refTxt" placeholder="fx Mod døren">
+  <label class="small" for="boxNote">Note til dåsen</label>
+  <textarea id="boxNote" rows="3" placeholder="fx svær at komme til, dåse bag gips …"></textarea>
 
   <div class="card">
     <svg id="draw" viewBox="0 0 320 330" role="img" aria-label="PL-dåse set nedefra"></svg>
     <p class="legend">Stå under dåsen med ansigtet mod toppen: 1-3 er foran dig, 4-6 bag dig, og venstre er din venstre. Tryk på en indføring.</p>
   </div>
 
-  <div class="card photo"><div id="photoBox"></div><div id="mkBar" style="display:none;margin:8px 0"></div><div class="row"><button id="camBtn" class="primary">📷 Tag billede</button><button id="photoBtn">🖼️ Galleri</button><button id="mkBtn">📍 Markér</button><button id="photoDel" class="danger">Fjern</button></div><input type="file" id="photoIn" accept="image/*" hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>
+  <div class="card photo"><div id="photoBox"></div><div id="thumbs" class="chips th" style="display:none"></div><div id="mkBar" style="display:none;margin:8px 0"></div><div class="row"><button id="camBtn" class="primary">📷 Tag billede</button><button id="photoBtn">🖼️ Galleri</button><button id="mkBtn">📍 Markér</button><button id="photoDel" class="danger">Fjern</button></div><input type="file" id="photoIn" accept="image/*" hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>
 
   <div class="card" id="list"></div>
+
+  <button id="restTom" style="width:100%;margin-top:12px">Sæt resterende uregistrerede til „Tom / ikke tilsluttet“</button>
 
   <div class="row" style="margin-top:12px"><a class="btn" href="/api/export?format=csv" download>⬇ Eksportér CSV</a><a class="btn" href="/api/export?format=json&amp;download=1" download>⬇ Eksportér JSON</a></div>
 
@@ -93,7 +99,7 @@ a.btn{flex:1;text-align:center;text-decoration:none;background:var(--card);borde
     <button id="copyBtn" class="primary" style="flex:1">Kopiér som tekst</button>
     <button id="delBtn" class="danger">Slet dåse</button>
   </div>
-<p class="legend" style="margin-top:18px">Version 11 · <a href="#" id="upd" style="color:var(--muted)">Tving opdatering</a></p>
+<p class="legend" style="margin-top:18px">Version 13 · <a href="#" id="upd" style="color:var(--muted)">Tving opdatering</a></p>
 </main>
 
 <div id="login"><form id="lf" class="box"><h1>PL-dåse</h1><input type="text" id="lu" placeholder="Brugernavn" autocomplete="username" autocapitalize="none" required><input type="password" id="lp" placeholder="Kodeord" autocomplete="current-password" required><button class="primary">Log ind</button><p id="err"></p></form></div>
@@ -108,6 +114,7 @@ var FN=[
  {k:"Stikkontakt",c:"hsl(145,55%,36%)",s:"Stik"},
  {k:"Korrespondance",c:"hsl(280,50%,50%)",s:"Korr."},
  {k:"Videre til dåse",c:"hsl(185,60%,36%)",s:"Videre"},
+ {k:"Tom / ikke tilsluttet",c:"hsl(215,10%,55%)",s:"Tom",empty:true},
  {k:"Andet",c:"hsl(220,10%,45%)",s:"Andet"}
 ];
 var CABLES=["NOMP 3G1,5","NOMP 3G2,5","NOMP 4G1,5","NOMP 5G1,5","NOMP 2×1,5","Signal 2×0,75"];
@@ -120,7 +127,7 @@ function load(){try{return JSON.parse(localStorage.getItem("pl-daase")||"null")}
 function save(){flush();queueSync();if(user)stat("Gemt · sender …")}
 function saveSoon(){clearTimeout(pt);pt=setTimeout(flush,300);queueSync()}
 function addBox(){
-  var b={id:"b"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:"Dåse "+(vis().length+1),ref:"Mod døren",entries:[],v:1,sv:0};
+  var b={id:"b"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:"Dåse "+(vis().length+1),ref:"Mod døren",entries:[],photos:[],note:"",v:1,sv:0};
   for(var i=0;i<6;i++)b.entries.push({fn:"",cable:"",note:""});
   S.boxes.push(b);S.cur=b.id;save();
 }
@@ -134,7 +141,7 @@ function render(){if(!getBox()){if(!vis().length)addBox();S.cur=vis()[0].id}
   var b=getBox();
   var sel=$("boxSel");sel.innerHTML="";
   vis().forEach(function(x){var o=document.createElement("option");o.value=x.id;o.textContent=x.name||"(uden navn)";if(x.id===S.cur)o.selected=true;sel.appendChild(o)});
-  $("boxName").value=b.name;$("refTxt").value=b.ref;
+  $("boxName").value=b.name;$("refTxt").value=b.ref;$("boxNote").value=b.note||"";
   drawSvg(b);drawList(b);drawPhoto(b);
 }
 function drawSvg(b){
@@ -145,7 +152,7 @@ function drawSvg(b){
   for(var i=0;i<6;i++){
     var g=i<3?0:1,k=i%3,ex=cx+(k-1)*52,ey=g?cy+R+12:cy-R-12,ly=g?cy+R-26:cy-R+26;
     var e=b.entries[i],f=fnOf(e.fn);
-    var has=!f&&(e.cable||e.note),fill=f?f.c:"var(--card)",stroke=f?"none":(has?"#c98a00":"var(--boxline)"),tc=f?"#fff":(has?"#c98a00":"var(--muted)");
+    var has=!f&&(e.cable||e.note),em=f&&f.empty,fill=f&&!em?f.c:"var(--card)",stroke=f?(em?"var(--boxline)":"none"):(has?"#c98a00":"var(--boxline)"),tc=f?(em?"var(--muted)":"#fff"):(has?"#c98a00":"var(--muted)");
     out+='<g data-i="'+i+'" style="cursor:pointer">';
     out+='<circle cx="'+ex+'" cy="'+ey+'" r="'+ER+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="2" stroke-dasharray="'+(f||has?"0":"4 3")+'"/>';
     out+='<text x="'+ex+'" y="'+(ey+7)+'" text-anchor="middle" font-size="20" font-weight="700" fill="'+tc+'">'+(i+1)+'</text>';
@@ -210,54 +217,56 @@ function chips(skipCable){
 function closeSheet(){$("sheet").className=""}
 $("sheet").onclick=function(e){if(e.target===this)closeSheet()};
 
-var mk={on:false,sel:0};
-function wrapHtml(b,live){
-  var m=b.marks||[],t='<div class="pw'+(live&&mk.on?' edit':'')+'"><img src="'+b.photo+'" alt="Billede af dåsen">';
+var mk={on:false,sel:0,p:0};
+function curPh(b){var a=b.photos||[];if(mk.p>=a.length)mk.p=Math.max(0,a.length-1);return a[mk.p]||null}
+function wrapHtml(b,ph,live){
+  var m=ph.marks||[],t='<div class="pw'+(live&&mk.on?' edit':'')+'"><img src="'+ph.d+'" alt="Billede af dåsen">';
   for(var i=0;i<6;i++){var p=m[i];if(!p)continue;var f=fnOf(b.entries[i].fn);
     t+='<span class="mk'+(live&&mk.on&&mk.sel===i?' sel':'')+'" data-i="'+i+'" style="left:'+p.x*100+'%;top:'+p.y*100+'%;background:'+(f?f.c:'var(--boxline)')+'">'+(i+1)+'</span>'}
   return t+'</div>';
 }
-function openLight(b){$("panel").innerHTML='<div style="text-align:center">'+wrapHtml(b,false)+'</div><div class="actions"><button id="cl" class="primary">Luk</button></div>';$("cl").onclick=closeSheet;$("sheet").className="open"}
+function openLight(b,ph){$("panel").innerHTML='<div style="text-align:center">'+wrapHtml(b,ph,false)+'</div><div class="actions"><button id="cl" class="primary">Luk</button></div>';$("cl").onclick=closeSheet;$("sheet").className="open"}
 function drawPhoto(b){
-  var bx=$("photoBox"),bar=$("mkBar");
-  if(!b.photo){mk.on=false;bx.innerHTML='<div style="color:var(--muted);font-size:.9rem;padding:6px 2px">Intet billede tilknyttet.</div>'}
+  var bx=$("photoBox"),bar=$("mkBar"),th=$("thumbs"),ph=curPh(b),n=(b.photos||[]).length;
+  if(!ph){mk.on=false;bx.innerHTML='<div style="color:var(--muted);font-size:.9rem;padding:6px 2px">Intet billede tilknyttet.</div>'}
   else{
-    bx.innerHTML='<div style="text-align:center">'+wrapHtml(b,true)+'</div>';
+    bx.innerHTML='<div style="text-align:center">'+wrapHtml(b,ph,true)+'</div>';
     var pw=bx.querySelector(".pw"),im=pw.querySelector("img");
     pw.onclick=function(e){
       var t=e.target;
       if(t.classList.contains("mk")){var i=+t.getAttribute("data-i");if(mk.on){mk.sel=i;drawPhoto(b)}else openSheet(i);return}
-      if(!mk.on){openLight(b);return}
+      if(!mk.on){openLight(b,ph);return}
       var r=im.getBoundingClientRect();
       var x=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y=Math.min(1,Math.max(0,(e.clientY-r.top)/r.height));
-      b.marks=(b.marks||[]).slice();while(b.marks.length<6)b.marks.push(null);
-      b.marks[mk.sel]={x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000};
-      for(var k=1;k<=6;k++){var j=(mk.sel+k)%6;if(!b.marks[j]){mk.sel=j;break}}
+      ph.marks=(ph.marks||[]).slice();while(ph.marks.length<6)ph.marks.push(null);
+      ph.marks[mk.sel]={x:Math.round(x*1000)/1000,y:Math.round(y*1000)/1000};
+      for(var k=1;k<=6;k++){var j=(mk.sel+k)%6;if(!ph.marks[j]){mk.sel=j;break}}
       touch(b);save();drawPhoto(b);
     };
   }
-  $("camBtn").textContent=b.photo?"📷 Tag nyt billede":"📷 Tag billede";
-  $("photoDel").style.display=b.photo?"":"none";
-  $("mkBtn").style.display=b.photo?"":"none";
+  th.style.display=n>1?"":"none";th.innerHTML="";
+  if(n>1)for(var q=0;q<n;q++){var c=document.createElement("button");c.className="chip"+(mk.p===q?" on":"");c.textContent="Billede "+(q+1)+"/"+n;c.setAttribute("data-p",q);c.onclick=function(){mk.p=+this.getAttribute("data-p");drawPhoto(b)};th.appendChild(c)}
+  $("photoDel").style.display=ph?"":"none";
+  $("mkBtn").style.display=ph?"":"none";
   $("mkBtn").textContent=mk.on?"✓ Færdig":"📍 Markér";
-  bar.style.display=(b.photo&&mk.on)?"":"none";
-  if(b.photo&&mk.on){
-    var m=b.marks||[],t='<div style="font-size:.85rem;color:var(--muted);margin-bottom:6px">Vælg nummer, og tryk på billedet, hvor indføringen sidder. Tryk igen for at flytte.</div><div class="chips">';
-    for(var i=0;i<6;i++)t+='<button class="chip'+(mk.sel===i?' on':'')+'" data-i="'+i+'">'+(i+1)+(m[i]?' ✓':'')+'</button>';
-    t+='<button class="chip danger" id="mkDel">Fjern markør</button></div>';
-    bar.innerHTML=t;
+  bar.style.display=(ph&&mk.on)?"":"none";
+  if(ph&&mk.on){
+    var m=ph.marks||[],t2='<div style="font-size:.85rem;color:var(--muted);margin-bottom:6px">Vælg nummer, og tryk på billedet, hvor indføringen sidder. Tryk igen for at flytte.</div><div class="chips">';
+    for(var i2=0;i2<6;i2++)t2+='<button class="chip'+(mk.sel===i2?' on':'')+'" data-i="'+i2+'">'+(i2+1)+(m[i2]?' ✓':'')+'</button>';
+    t2+='<button class="chip danger" id="mkDel">Fjern markør</button></div>';
+    bar.innerHTML=t2;
     var cs=bar.querySelectorAll("button[data-i]");
-    for(var q=0;q<cs.length;q++)cs[q].onclick=function(){mk.sel=+this.getAttribute("data-i");drawPhoto(b)};
-    $("mkDel").onclick=function(){if(b.marks&&b.marks[mk.sel]){b.marks=b.marks.slice();b.marks[mk.sel]=null;touch(b);save();drawPhoto(b)}};
+    for(var u=0;u<cs.length;u++)cs[u].onclick=function(){mk.sel=+this.getAttribute("data-i");drawPhoto(b)};
+    $("mkDel").onclick=function(){if(ph.marks&&ph.marks[mk.sel]){ph.marks=ph.marks.slice();ph.marks[mk.sel]=null;touch(b);save();drawPhoto(b)}};
   }
 }
 $("mkBtn").onclick=function(){
-  var b=getBox();mk.on=!mk.on;
-  if(mk.on){var m=b.marks||[],f=0;for(var i=0;i<6;i++)if(!m[i]){f=i;break}mk.sel=f}
+  var b=getBox(),ph=curPh(b);mk.on=!mk.on;
+  if(mk.on&&ph){var m=ph.marks||[],f=0;for(var i=0;i<6;i++)if(!m[i]){f=i;break}mk.sel=f}
   drawPhoto(b);
 };
-$("photoBtn").onclick=function(){$("photoIn").click()};
-$("camBtn").onclick=function(){$("camIn").click()};
+$("photoBtn").onclick=function(){if((getBox().photos||[]).length>=10){toast("Højst 10 billeder pr. dåse");return}$("photoIn").click()};
+$("camBtn").onclick=function(){if((getBox().photos||[]).length>=10){toast("Højst 10 billeder pr. dåse");return}$("camIn").click()};
 $("camIn").onchange=$("photoIn").onchange=function(){
   var f=this.files&&this.files[0];this.value="";if(!f)return;
   var box=getBox();
@@ -268,29 +277,36 @@ $("camIn").onchange=$("photoIn").onchange=function(){
       var s=Math.min(1,1400/Math.max(img.width,img.height));
       var c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
       c.getContext("2d").drawImage(img,0,0,c.width,c.height);
-      var old=box.photo;box.photo=c.toDataURL("image/jpeg",0.8);box.marks=[];touch(box);
-      try{save();drawPhoto(box);toast("Billede gemt")}
-      catch(e){box.photo=old;drawPhoto(box);toast("Kunne ikke gemme – for lidt plads")}
+      if((box.photos||[]).length>=10){toast("Højst 10 billeder pr. dåse");return}
+      box.photos=(box.photos||[]).concat([{id:"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),d:c.toDataURL("image/jpeg",0.8),marks:[],up:false}]);
+      mk.p=box.photos.length-1;mk.on=false;touch(box);save();drawPhoto(box);toast("Billede gemt");
     };
     img.onerror=function(){toast("Kunne ikke læse billedet")};
     img.src=r.result;
   };
   r.readAsDataURL(f);
 };
-$("photoDel").onclick=function(){var b=getBox();delete b.photo;delete b.marks;touch(b);save();drawPhoto(b)};
+$("photoDel").onclick=function(){var b=getBox();if(!curPh(b)||!confirm("Fjern dette billede?"))return;b.photos=b.photos.slice();b.photos.splice(mk.p,1);mk.on=false;touch(b);save();drawPhoto(b)};
+$("restTom").onclick=function(){
+  var b=getBox(),n=0;
+  b.entries.forEach(function(e,i){if(!e.fn&&!e.cable&&!e.note){b.entries[i]={fn:"Tom / ikke tilsluttet",cable:"",note:""};n++}});
+  if(!n){toast("Alle indføringer er allerede registreret");return}
+  touch(b);save();render();toast(n+" indføring(er) sat til Tom");
+};
 $("boxSel").onchange=function(){S.cur=this.value;mk.on=false;save();render()};
 $("newBtn").onclick=function(){addBox();render()};
 $("boxName").oninput=function(){getBox().name=this.value;touch(getBox());saveSoon();var o=$("boxSel").options[$("boxSel").selectedIndex];if(o)o.textContent=this.value||"(uden navn)"};
+$("boxNote").oninput=function(){var b=getBox();b.note=this.value;touch(b);saveSoon()};
 $("refTxt").oninput=function(){getBox().ref=this.value;touch(getBox());saveSoon();drawSvg(getBox())};
 $("delBtn").onclick=function(){
   if(!confirm("Slet denne dåse?"))return;
-  var d=getBox();d.deleted=true;delete d.photo;touch(d);
+  var d=getBox();d.deleted=true;d.photos=[];touch(d);
   if(!vis().length)addBox();
   S.cur=vis()[0].id;save();render();
 };
 $("copyBtn").onclick=function(){
   var b=getBox();
-  var t=(b.name||"PL-dåse")+" – set nedefra, op = "+(b.ref||"?")+"\n";
+  var t=(b.name||"PL-dåse")+" – jeg står med ansigtet mod "+(b.ref||"?")+" (1-3 foran mig, 4-6 bag mig, venstre = min venstre)\n"+(b.note?"Note: "+b.note+"\n":"");
   b.entries.forEach(function(e,i){
     t+=(i+1)+": "+(e.fn||"ikke registreret")+(e.cable?" | "+e.cable:"")+(e.note?" | "+e.note:"")+"\n";
   });
@@ -342,7 +358,7 @@ async function boot(){
     old=load();
     if(old&&old.boxes&&old.boxes.length){S=old;S.rev=S.rev||0;S.boxes.forEach(function(b){if(b.v===undefined){b.v=1;b.sv=0}})}else old=null;
   }
-  user=S.user||"";$("who").textContent=user;
+  S.boxes.forEach(norm);user=S.user||"";$("who").textContent=user;
   if(!vis().length)addBox();
   if(!getBox())S.cur=vis()[0].id;
   render();$("app").style.visibility="visible";
@@ -351,7 +367,8 @@ async function boot(){
   start();
 }
 function touch(b){b.v=(b.v||0)+1}
-function blank(b){return !b.deleted&&!b.photo&&/^Dåse \d+$/.test(b.name)&&b.entries.every(function(e){return !e.fn&&!e.cable&&!e.note})}
+function norm(b){if(b.photo){b.photos=[{id:"p1",d:b.photo,marks:b.marks||[],up:false}]}delete b.photo;delete b.marks;if(!b.photos)b.photos=[];b.note=b.note||"";return b}
+function blank(b){return !b.deleted&&!(b.photos&&b.photos.length)&&!b.note&&/^Dåse \d+$/.test(b.name)&&b.entries.every(function(e){return !e.fn&&!e.cable&&!e.note})}
 function pending(b){return b.v!==b.sv&&!(b.sv===0&&blank(b))}
 function dirty(){return S.boxes.some(pending)}
 var user="",timer=null,syncing=false;
@@ -365,18 +382,25 @@ async function sync(){
   try{
     var first=S.rev===0;
     var sent=[],changes=[],size=0;
-    S.boxes.filter(pending).forEach(function(b){if(sent.length&&size>6e6)return;size+=(b.photo||"").length+600;sent.push({b:b,v:b.v});changes.push(b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,marks:b.marks||[],entries:b.entries,photo:b.photo||""})});
+    S.boxes.filter(pending).forEach(function(b){
+      if(sent.length&&size>6e6)return;
+      var ph=b.photos||[];
+      size+=ph.reduce(function(s,p){return s+(p.up?0:p.d.length)},0)+600;
+      sent.push({b:b,v:b.v,up:ph.filter(function(p){return !p.up}).map(function(p){return p.id})});
+      changes.push(b.deleted?{id:b.id,deleted:true}:{id:b.id,name:b.name,ref:b.ref,note:b.note||"",entries:b.entries,photos:ph.map(function(p){return p.up?{id:p.id,marks:p.marks}:{id:p.id,d:p.d,marks:p.marks}})});
+    });
     
     var r=await api("/api/sync",{since:S.rev,changes:changes});
     if(r.status===401){user="";showLogin("Log ind igen");return}
     if(!r.ok)throw 0;
     var d=await r.json(),rjs=d.rejected||[];
-    sent.forEach(function(x){if(x.b.v===x.v&&rjs.indexOf(x.b.id)<0)x.b.sv=x.v});
+    sent.forEach(function(x){if(rjs.indexOf(x.b.id)>=0)return;if(x.b.v===x.v)x.b.sv=x.v;(x.b.photos||[]).forEach(function(p){if(x.up.indexOf(p.id)>=0)p.up=true})});
+    (d.missing||[]).forEach(function(k){var a=k.split("/"),bb=S.boxes.filter(function(b){return b.id===a[0]})[0];if(!bb)return;(bb.photos||[]).forEach(function(p){if(p.id===a[1])p.up=false});touch(bb)});
     d.boxes.forEach(function(sb){
       var lb=S.boxes.filter(function(b){return b.id===sb.id})[0];
       if(lb&&lb.v!==lb.sv)return;
       if(lb)S.boxes.splice(S.boxes.indexOf(lb),1);
-      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,marks:sb.marks||[],entries:sb.entries,photo:sb.photo||undefined,v:0,sv:0});
+      if(!sb.deleted)S.boxes.push({id:sb.id,name:sb.name,ref:sb.ref,note:sb.note||"",entries:sb.entries,photos:(sb.photos||[]).map(function(p){return {id:p.id,d:p.d,marks:p.marks||[],up:true}}),v:0,sv:0});
     });
     S.boxes=S.boxes.filter(function(b){return !(b.deleted&&b.v===b.sv)});
     if(first&&S.boxes.some(function(b){return !b.deleted&&!blank(b)}))S.boxes=S.boxes.filter(function(b){return !(b.sv===0&&b.v>0&&blank(b))});
